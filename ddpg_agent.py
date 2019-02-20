@@ -225,7 +225,7 @@ class DdpgHer(object):
                 if self.reporter is not None:
                     self.reporter(**res)
                 if (iter_i + 1) % self.config['checkpoint_freq']:
-                    self.save_checkpoint()
+                    self.save_checkpoint(epoch=(iter_i + 1))
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
