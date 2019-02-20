@@ -1,8 +1,10 @@
 import threading
+
 import numpy as np
 from mpi4py import MPI
 
-class normalizer:
+
+class Normalizer:
     def __init__(self, size, eps=1e-2, default_clip_range=np.inf):
         self.size = size
         self.eps = eps
@@ -67,4 +69,4 @@ class normalizer:
     def normalize(self, v, clip_range=None):
         if clip_range is None:
             clip_range = self.default_clip_range
-        return np.clip((v - self.mean) / (self.std), -clip_range, clip_range)
+        return np.clip((v - self.mean) / self.std, -clip_range, clip_range)

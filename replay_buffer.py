@@ -1,11 +1,8 @@
 import threading
 import numpy as np
 
-"""
-the replay buffer here is basically from the openai baselines code
 
-"""
-class replay_buffer:
+class ReplayBuffer:
     def __init__(self, env_params, buffer_size, sample_func):
         self.env_params = env_params
         self.T = env_params['max_timesteps']

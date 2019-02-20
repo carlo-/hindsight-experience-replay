@@ -1,6 +1,8 @@
 import numpy as np
 
-class her_sampler:
+
+class HerSampler:
+
     def __init__(self, replay_strategy, replay_k, reward_func=None):
         self.replay_strategy = replay_strategy
         self.replay_k = replay_k
