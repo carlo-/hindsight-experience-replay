@@ -2,6 +2,7 @@ import glob
 import itertools as it
 import os
 import pickle
+from datetime import datetime
 
 import torch
 import numpy as np
@@ -97,9 +98,14 @@ class DdpgHer(object):
         self._trained = False
 
     def _training_step(self):
+        rollout_times = []
+        update_times = []
+        taken_steps = 0
+        step_tic = datetime.now()
         for _ in range(self.config['n_cycles']):
             mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
             for _ in range(self.config["rollouts_per_worker"]):
+                tic = datetime.now()
                 # reset the rollouts
                 ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
                 # reset the environment
@@ -115,6 +121,7 @@ class DdpgHer(object):
                         action = self._select_actions(pi)
                     # feed the actions into the environment
                     observation_new, _, _, info = self.env.step(action)
+                    taken_steps += 1
                     obs_new = observation_new['observation']
                     ag_new = observation_new['achieved_goal']
                     # append rollouts
@@ -131,6 +138,7 @@ class DdpgHer(object):
                 mb_ag.append(ep_ag)
                 mb_g.append(ep_g)
                 mb_actions.append(ep_actions)
+                rollout_times.append((datetime.now() - tic).total_seconds())
 
             # convert them into arrays
             mb_obs = np.array(mb_obs)
@@ -140,16 +148,28 @@ class DdpgHer(object):
             # store the episodes
             self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
             self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
+
+            tic = datetime.now()
+            # train the network
             for _ in range(self.config['n_batches']):
-                # train the network
                 self._update_network()
             # soft update
             self._soft_update_target_network(self.actor_target_network, self.actor_network)
             self._soft_update_target_network(self.critic_target_network, self.critic_network)
+            update_times.append((datetime.now() - tic).total_seconds())
+        step_time = (datetime.now() - step_tic).total_seconds()
 
+        tic = datetime.now()
         success_rate = self._eval_agent()
+        eval_time = (datetime.now() - tic).total_seconds()
+
         return {
-            "test_success_rate": success_rate
+            "test_success_rate": success_rate,
+            "avg_rollout_time": np.mean(rollout_times),
+            "avg_network_update_time": np.mean(update_times),
+            "evaluation_time": eval_time,
+            "step_time": step_time,
+            "env_steps": taken_steps,
         }
 
     def save_checkpoint(self, epoch=0):
@@ -208,24 +228,26 @@ class DdpgHer(object):
     def train(self):
         if self._trained:
             raise RuntimeError
-
+        tic = datetime.now()
         n_epochs = self.config.get('n_epochs')
-        for iter_i in it.count():
+        saved_checkpoints = 0
 
+        for iter_i in it.count():
             if n_epochs is not None and iter_i >= n_epochs:
                 break
-
             res = self._training_step()
-            res = {
-                **res,
-                "training_iteration": iter_i + 1
-            }
 
             if MPI.COMM_WORLD.Get_rank() == 0:
-                if self.reporter is not None:
-                    self.reporter(**res)
                 if (iter_i + 1) % self.config['checkpoint_freq'] == 0:
                     self.save_checkpoint(epoch=(iter_i + 1))
+                    saved_checkpoints += 1
+                if callable(self.reporter):
+                    self.reporter(**{
+                        **res,
+                        "training_iteration": iter_i + 1,
+                        "total_time": (datetime.now() - tic).total_seconds(),
+                        "checkpoints": saved_checkpoints
+                    })
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
