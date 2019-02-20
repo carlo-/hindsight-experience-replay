@@ -218,7 +218,7 @@ class DdpgHer(object):
             res = self._training_step()
             res = {
                 **res,
-                "epoch": iter_i + 1
+                "training_iteration": iter_i + 1
             }
 
             if MPI.COMM_WORLD.Get_rank() == 0:

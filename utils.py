@@ -3,6 +3,19 @@ import numpy as np
 import torch
 
 
+class TensorboardReporter:
+
+    def __init__(self, *, log_dir, training_iter_key='training_iteration'):
+        from tensorboardX import SummaryWriter
+        self._writer = SummaryWriter(log_dir=log_dir)
+        self._training_iter_key = training_iter_key
+
+    def __call__(self, **kwargs):
+        iter_i = kwargs[self._training_iter_key]
+        for k, v in kwargs.items():
+            self._writer.add_scalar(k, v, iter_i)
+
+
 # sync_networks across the different cores
 def sync_networks(network):
     """

@@ -4,6 +4,7 @@ import os
 from mpi4py import MPI
 
 from ddpg_agent import DdpgHer
+from utils import TensorboardReporter
 
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), 'out/her_torch')
@@ -49,17 +50,20 @@ def train_mpi(config: dict=None, reporter=None):
         print('Done.')
 
 
+def simple_reporter(**kwargs):
+    print(kwargs)
+
+
 def main(spawn_children=False):
 
-    def reporter(**kwargs):
-        print(kwargs)
-
+    local_dir = f'{OUT_DIR}/test2'
+    reporter = TensorboardReporter(log_dir=local_dir)
     config = dict(
         env="FetchPickAndPlace-v1",
         n_workers=6,
-        n_epochs=21,
+        n_epochs=100,
         checkpoint_freq=10,
-        local_dir=f'{OUT_DIR}/test1'
+        local_dir=local_dir
     )
 
     if spawn_children:
