@@ -224,7 +224,7 @@ class DdpgHer(object):
             if MPI.COMM_WORLD.Get_rank() == 0:
                 if self.reporter is not None:
                     self.reporter(**res)
-                if (iter_i + 1) % self.config['checkpoint_freq']:
+                if (iter_i + 1) % self.config['checkpoint_freq'] == 0:
                     self.save_checkpoint(epoch=(iter_i + 1))
 
     # pre_process the inputs
