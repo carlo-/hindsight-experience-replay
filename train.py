@@ -56,10 +56,11 @@ def simple_reporter(**kwargs):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/test2'
+    local_dir = f'{OUT_DIR}/hand_reach_no_rot'
     reporter = TensorboardReporter(log_dir=local_dir)
     config = dict(
-        env="FetchPickAndPlace-v1",
+        env="MovingHandReach-v0",
+        env_config=dict(ignore_rotation_ctrl=True),
         n_workers=6,
         n_epochs=100,
         checkpoint_freq=10,
