@@ -1,4 +1,3 @@
-import torch
 import gym
 
 from ddpg_agent import DdpgHer
@@ -7,8 +6,12 @@ from train import OUT_DIR
 
 def main():
 
-    env = gym.make('FetchPickAndPlace-v1')
-    local_dir = f'{OUT_DIR}/test1'
+    # env = gym.make('FetchPickAndPlace-v1')
+    # local_dir = f'{OUT_DIR}/test3'
+
+    env = gym.make('MovingHandReach-v0', ignore_rotation_ctrl=True, ignore_target_rotation=True)
+    local_dir = f'{OUT_DIR}/hand_reach_no_rot'
+
     agent = DdpgHer.load(env, local_dir)
 
     obs = env.reset()
