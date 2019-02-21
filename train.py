@@ -60,7 +60,7 @@ def main(spawn_children=False):
     reporter = TensorboardReporter(log_dir=local_dir)
     config = dict(
         env="MovingHandReach-v0",
-        env_config=dict(ignore_rotation_ctrl=True),
+        env_config=dict(ignore_rotation_ctrl=True, ignore_target_rotation=True),
         n_workers=6,
         n_epochs=100,
         checkpoint_freq=10,
