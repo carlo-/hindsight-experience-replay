@@ -56,11 +56,11 @@ def simple_reporter(**kwargs):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pick_and_place_no_rot'
+    local_dir = f'{OUT_DIR}/hand_pick_and_place_obs_no_rot'
     reporter = TensorboardReporter(log_dir=local_dir)
     config = dict(
         env="HandPickAndPlace-v0",
-        env_config=dict(ignore_rotation_ctrl=True, ignore_target_rotation=True),
+        env_config=dict(ignore_rotation_ctrl=True, ignore_target_rotation=True, success_on_grasp_only=True),
         n_workers=6,
         n_epochs=100,
         checkpoint_freq=1,
