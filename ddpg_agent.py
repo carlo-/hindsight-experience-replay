@@ -52,7 +52,7 @@ class DdpgHer(object):
         'clip_range': 5.,
         'demo_length': 20,
         'local_dir': None,
-        'cuda': False,
+        'cuda': None,
         'rollouts_per_worker': 2,
     }
 
@@ -66,6 +66,9 @@ class DdpgHer(object):
         goal_size = obs_space.spaces['desired_goal'].shape[0]
         self.env_params = get_env_params(self.env)
         self.reporter = reporter
+
+        if self.config['cuda'] is None:
+            self.config['cuda'] = torch.cuda.is_available()
 
         # create the network
         self.actor_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
@@ -175,6 +178,7 @@ class DdpgHer(object):
     def save_checkpoint(self, epoch=0):
         local_dir = self.config.get('local_dir')
         if local_dir is not None:
+            local_dir = local_dir + '/checkpoints'
             os.makedirs(local_dir, exist_ok=True)
             model_path = f'{local_dir}/model_{epoch}.pt'
             status_path = f'{local_dir}/status_{epoch}.pkl'
@@ -212,6 +216,7 @@ class DdpgHer(object):
 
         agent.actor_network.load_state_dict(actor_state)
         agent.actor_network.eval()
+        print(f'Loaded model for epoch {epoch}.')
         return agent
 
     def predict(self, obs):

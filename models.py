@@ -45,7 +45,7 @@ class CriticNetwork(nn.Module):
         self.max_action = action_space.high[0]
 
     def forward(self, x, actions):
-        x = torch.cat([x, actions / self.max_action], dim=1)
+        x = torch.cat((x, actions / self.max_action), dim=1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))

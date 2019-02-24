@@ -1,10 +1,11 @@
 import sys
 import os
+from datetime import datetime
 
 from mpi4py import MPI
 
 from ddpg_agent import DdpgHer
-from utils import TensorboardReporter
+from utils import MultiReporter
 
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), 'out/her_torch')
@@ -17,14 +18,25 @@ def init_env(env_id, env_config=None):
     return gym.make(env_id, **env_config)
 
 
-def train(config: dict=None, reporter=None):
+def train(config: dict=None):
+
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        local_dir = config['local_dir']
+        now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        local_dir = f'{local_dir}/{now}'
+        os.makedirs(local_dir, exist_ok=False)
+        config['local_dir'] = local_dir
+        reporter = MultiReporter(log_dir=local_dir)
+    else:
+        reporter = None
+
     env = init_env(config['env'], config.get('env_config'))
     print(f'Environment with rank {MPI.COMM_WORLD.Get_rank()} ready.')
     agent = DdpgHer(env, config, reporter)
     agent.train()
 
 
-def train_mpi(config: dict=None, reporter=None):
+def train_mpi(config: dict=None):
 
     comm = MPI.Comm.Get_parent()
     if comm == MPI.COMM_NULL:
@@ -42,7 +54,7 @@ def train_mpi(config: dict=None, reporter=None):
     print(f'Worker with rank {MPI.COMM_WORLD.Get_rank()} {" (master)" if is_master else ""} ready.')
 
     if not is_master:
-        train(config, reporter)
+        train(config)
 
     print('Waiting...')
     comm.barrier()
@@ -56,21 +68,20 @@ def simple_reporter(**kwargs):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pick_and_place_obs_no_rot'
-    reporter = TensorboardReporter(log_dir=local_dir)
+    local_dir = f'{OUT_DIR}/hand_pp_grasp_only'
     config = dict(
         env="HandPickAndPlace-v0",
         env_config=dict(ignore_rotation_ctrl=True, ignore_target_rotation=True, success_on_grasp_only=True),
         n_workers=6,
-        n_epochs=100,
-        checkpoint_freq=1,
+        n_epochs=300,
+        checkpoint_freq=2,
         local_dir=local_dir
     )
 
     if spawn_children:
-        train_mpi(config, reporter)
+        train_mpi(config)
     else:
-        train(config, reporter)
+        train(config)
 
 
 if __name__ == '__main__':
