@@ -70,6 +70,16 @@ class DdpgHer(object):
         if self.config['cuda'] is None:
             self.config['cuda'] = torch.cuda.is_available()
 
+        if self.config['cuda']:
+            n_gpus = torch.cuda.device_count()
+            assert n_gpus > 0
+            n_workers = MPI.COMM_WORLD.size
+            rank = MPI.COMM_WORLD.rank
+            w_per_gpu = int(np.ceil(n_workers / n_gpus))
+            gpu_i = rank // w_per_gpu
+            print(f'Worker with rank {rank} assigned GPU {gpu_i}.')
+            torch.cuda.set_device(gpu_i)
+
         # create the network
         self.actor_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
         self.critic_network = CriticNetwork(action_space=a_space, observation_space=obs_space)
