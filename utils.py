@@ -1,19 +1,69 @@
 from mpi4py import MPI
+import pandas as pd
 import numpy as np
 import torch
 
 
+class StdoutReporter:
+
+    def __init__(self, *, training_iter_key='training_iteration'):
+        self._training_iter_key = training_iter_key
+
+    def __call__(self, **kwargs):
+        iter_i = kwargs.get(self._training_iter_key, '?')
+        print('\n'+'#'*40)
+        print(f'Iteration {iter_i}')
+        print('#'*40)
+        for k, v in kwargs.items():
+            print(f'{k}: {v}')
+
+
 class TensorboardReporter:
 
-    def __init__(self, *, log_dir, training_iter_key='training_iteration'):
+    def __init__(self, *, log_dir, training_iter_key='training_iteration', tags_prefix='data'):
         from tensorboardX import SummaryWriter
         self._writer = SummaryWriter(log_dir=log_dir)
         self._training_iter_key = training_iter_key
+        self._tags_prefix = tags_prefix
 
     def __call__(self, **kwargs):
         iter_i = kwargs[self._training_iter_key]
         for k, v in kwargs.items():
+            if self._tags_prefix is not None:
+                k = f'{self._tags_prefix}/{k}'
             self._writer.add_scalar(k, v, iter_i)
+
+
+class PandasReporter:
+
+    def __init__(self, *, log_dir):
+        self._log_path = f'{log_dir}/progress.csv'
+        self._progress = []
+
+    @property
+    def data_frame(self):
+        return pd.DataFrame(self._progress)
+
+    def __call__(self, **kwargs):
+        self._progress.append(kwargs)
+        self.data_frame.to_csv(self._log_path)
+
+
+class MultiReporter:
+
+    def __init__(self, *, log_dir, tb=True, stdout=True, csv=True):
+        reporters = []
+        if tb:
+            reporters.append(TensorboardReporter(log_dir=log_dir))
+        if stdout:
+            reporters.append(StdoutReporter())
+        if csv:
+            reporters.append(PandasReporter(log_dir=log_dir))
+        self._reporters = reporters
+
+    def __call__(self, **kwargs):
+        for r in self._reporters:
+            r(**kwargs)
 
 
 # sync_networks across the different cores
