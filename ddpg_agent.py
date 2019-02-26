@@ -237,7 +237,7 @@ class DdpgHer(object):
         inputs = self._preproc_inputs(obs, g)
         with torch.no_grad():
             pi = self.actor_network(inputs)
-        action = pi.detach().numpy().squeeze()
+        action = pi.detach().cpu().numpy().squeeze()
         return action
 
     def train(self):
