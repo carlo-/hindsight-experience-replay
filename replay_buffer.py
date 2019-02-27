@@ -12,11 +12,12 @@ class ReplayBuffer:
         self.n_transitions_stored = 0
         self.sample_func = sample_func
         # create the buffer to store info
-        self.buffers = {'obs': np.empty([self.size, self.T + 1, self.env_params['obs']]),
-                        'ag': np.empty([self.size, self.T + 1, self.env_params['goal']]),
-                        'g': np.empty([self.size, self.T, self.env_params['goal']]),
-                        'actions': np.empty([self.size, self.T, self.env_params['action']]),
-                        }
+        self.buffers = {
+            'obs': np.empty([self.size, self.T + 1, self.env_params['obs']]),
+            'ag': np.empty([self.size, self.T + 1, self.env_params['goal']]),
+            'g': np.empty([self.size, self.T, self.env_params['goal']]),
+            'actions': np.empty([self.size, self.T, self.env_params['action']]),
+        }
         # thread lock
         self.lock = threading.Lock()
     
@@ -35,14 +36,14 @@ class ReplayBuffer:
     
     # sample the data from the replay buffer
     def sample(self, batch_size):
-        temp_buffers = {}
+        buffers = {}
         with self.lock:
             for key in self.buffers.keys():
-                temp_buffers[key] = self.buffers[key][:self.current_size].copy()
-        temp_buffers['obs_next'] = temp_buffers['obs'][:, 1:, :]
-        temp_buffers['ag_next'] = temp_buffers['ag'][:, 1:, :]
+                buffers[key] = self.buffers[key][:self.current_size]
+        buffers['obs_next'] = buffers['obs'][:, 1:, :]
+        buffers['ag_next'] = buffers['ag'][:, 1:, :]
         # sample transitions
-        transitions = self.sample_func(temp_buffers, batch_size)
+        transitions = self.sample_func(buffers, batch_size)
         return transitions
 
     def _get_storage_idx(self, inc=None):

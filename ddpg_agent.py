@@ -114,6 +114,8 @@ class DdpgHer(object):
         rollout_times = []
         update_times = []
         taken_steps = 0
+        sampling_tot_time = 0.0
+        sampling_calls = 0
         step_tic = datetime.now()
         for _ in range(self.config['n_cycles']):
             mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
@@ -165,7 +167,12 @@ class DdpgHer(object):
             tic = datetime.now()
             # train the network
             for _ in range(self.config['n_batches']):
-                self._update_network()
+                # sample the episodes
+                sampling_tic = datetime.now()
+                sampled_transitions = self.buffer.sample(self.config['batch_size'])
+                sampling_tot_time += (datetime.now() - sampling_tic).total_seconds()
+                sampling_calls += 1
+                self._update_network(sampled_transitions)
             # soft update
             self._soft_update_target_network(self.actor_target_network, self.actor_network)
             self._soft_update_target_network(self.critic_target_network, self.critic_network)
@@ -178,6 +185,7 @@ class DdpgHer(object):
 
         return {
             "test_success_rate": success_rate,
+            "avg_her_sampling_time": sampling_tot_time / sampling_calls,
             "avg_rollout_time": np.mean(rollout_times),
             "avg_network_update_time": np.mean(update_times),
             "evaluation_time": eval_time,
@@ -329,9 +337,7 @@ class DdpgHer(object):
             target_param.data.copy_((1 - self.config['polyak']) * param.data + self.config['polyak'] * target_param.data)
 
     # update the network
-    def _update_network(self):
-        # sample the episodes
-        transitions = self.buffer.sample(self.config['batch_size'])
+    def _update_network(self, transitions):
         # pre-process the observation and goal
         o, o_next, g = transitions['obs'], transitions['obs_next'], transitions['g']
         transitions['obs'], transitions['g'] = self._preproc_og(o, g)
