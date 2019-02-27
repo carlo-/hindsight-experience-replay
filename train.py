@@ -68,15 +68,17 @@ def simple_reporter(**kwargs):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pp_high_friction'
+    local_dir = f'{OUT_DIR}/hand_pp_grasp_init'
     config = dict(
         env="HandPickAndPlace-v0",
         env_config=dict(
             ignore_rotation_ctrl=True,
             ignore_target_rotation=True,
-            success_on_grasp_only=True,
+            success_on_grasp_only=False,
             randomize_initial_arm_pos=True,
-            randomize_initial_object_pos=False
+            randomize_initial_object_pos=True,
+            grasp_state=True,
+            grasp_state_reset_p=0.5
         ),
         n_workers=6,
         n_epochs=500,
