@@ -3,6 +3,7 @@ import itertools as it
 import os
 import pickle
 from datetime import datetime
+from typing import Sequence
 
 import torch
 import numpy as np
@@ -54,6 +55,12 @@ class DdpgHer(object):
         'local_dir': None,
         'cuda': None,
         'rollouts_per_worker': 2,
+        'q_filter': False,
+        'prm_loss_weight': 0.001,
+        'aux_loss_weight': 0.0078,
+        'demo_batch_size': None,
+        'demo_file': None,
+        'num_demo': 100,
     }
 
     def __init__(self, env, config, reporter=None):
@@ -80,39 +87,55 @@ class DdpgHer(object):
             print(f'Worker with rank {rank} assigned GPU {gpu_i}.')
             torch.cuda.set_device(gpu_i)
 
+        self.bc_loss = self.config.get('demo_file') is not None
+        self.q_filter = self.config['q_filter']
+
         # create the network
         self.actor_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
         self.critic_network = CriticNetwork(action_space=a_space, observation_space=obs_space)
+
         # sync the networks across the cpus
         sync_networks(self.actor_network)
         sync_networks(self.critic_network)
+
         # build up the target network
         self.actor_target_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
         self.critic_target_network = CriticNetwork(action_space=a_space, observation_space=obs_space)
+
         # load the weights into the target networks
         self.actor_target_network.load_state_dict(self.actor_network.state_dict())
         self.critic_target_network.load_state_dict(self.critic_network.state_dict())
+
         # if use gpu
         if self.config['cuda']:
             self.actor_network.cuda()
             self.critic_network.cuda()
             self.actor_target_network.cuda()
             self.critic_target_network.cuda()
+
         # create the optimizer
         self.actor_optim = torch.optim.Adam(self.actor_network.parameters(), lr=self.config['lr_actor'])
         self.critic_optim = torch.optim.Adam(self.critic_network.parameters(), lr=self.config['lr_critic'])
+
         # her sampler
         self.her_module = HerSampler(self.config['replay_strategy'], self.config['replay_k'], self.env.compute_reward)
-        # create the replay buffer
-        self.buffer = ReplayBuffer(self.env_params, self.config['buffer_size'], self.her_module.sample_her_transitions)
+
         # create the normalizer
         self.o_norm = Normalizer(size=obs_size, default_clip_range=self.config['clip_range'])
         self.g_norm = Normalizer(size=goal_size, default_clip_range=self.config['clip_range'])
+
+        # create the replay and demo buffers
+        self.buffer = ReplayBuffer(self.env_params, self.config['buffer_size'], self.her_module.sample_her_transitions)
+        self.demo_buffer = None
+        if self.bc_loss:
+            self._init_demo_buffer(update_stats=True)
+
         self._trained = False
 
     def _training_step(self):
         rollout_times = []
         update_times = []
+        update_results = []
         taken_steps = 0
         sampling_tot_time = 0.0
         sampling_calls = 0
@@ -169,10 +192,11 @@ class DdpgHer(object):
             for _ in range(self.config['n_batches']):
                 # sample the episodes
                 sampling_tic = datetime.now()
-                sampled_transitions = self.buffer.sample(self.config['batch_size'])
+                sampled_transitions = self._sample_batch()
                 sampling_tot_time += (datetime.now() - sampling_tic).total_seconds()
                 sampling_calls += 1
-                self._update_network(sampled_transitions)
+                res = self._update_network(sampled_transitions)
+                update_results.append(res)
             # soft update
             self._soft_update_target_network(self.actor_target_network, self.actor_network)
             self._soft_update_target_network(self.critic_target_network, self.critic_network)
@@ -183,6 +207,10 @@ class DdpgHer(object):
         success_rate = self._eval_agent()
         eval_time = (datetime.now() - tic).total_seconds()
 
+        update_results_dict = dict()
+        for k in update_results[0].keys():
+            update_results_dict['avg_' + k] = np.mean([r[k] for r in update_results])
+
         return {
             "test_success_rate": success_rate,
             "avg_her_sampling_time": sampling_tot_time / sampling_calls,
@@ -191,7 +219,45 @@ class DdpgHer(object):
             "evaluation_time": eval_time,
             "step_time": step_time,
             "env_steps": taken_steps,
+            **update_results_dict,
         }
+
+    def _init_demo_buffer(self, update_stats=True):
+        assert self.bc_loss
+        file_path = self.config['demo_file']
+        num_demo = self.config['num_demo']
+        self.demo_buffer = ReplayBuffer(self.env_params, self.config['buffer_size'],
+                                        self.her_module.sample_her_transitions)
+
+        # data must be a dictionary of 4 lists; each list contains partial information for each episode.
+        data = pickle.load(open(file_path, 'rb'))
+        assert isinstance(data, dict)
+        assert len(data) == 4
+
+        ordered_data = []
+        for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions']:
+            mb_data = np.asarray(data[k])
+            assert len(mb_data) >= num_demo
+            ordered_data.append(mb_data[:num_demo])
+
+        self.demo_buffer.store_episode(ordered_data)
+        if update_stats:
+            self._update_normalizer(ordered_data)
+
+    def _sample_batch(self):
+        batch_size = self.config['batch_size']
+        if self.bc_loss:
+            demo_batch_size = self.config['demo_batch_size']
+            transitions = self.buffer.sample(batch_size - demo_batch_size)
+            transitions_demo = self.demo_buffer.sample(demo_batch_size)
+            for k, values in transitions_demo.items():
+                rollout_vec = transitions[k].tolist()
+                for v in values:
+                    rollout_vec.append(v.tolist())
+                transitions[k] = np.array(rollout_vec)
+        else:
+            transitions = self.buffer.sample(batch_size)
+        return transitions
 
     def save_checkpoint(self, epoch=0):
         local_dir = self.config.get('local_dir')
@@ -338,10 +404,12 @@ class DdpgHer(object):
 
     # update the network
     def _update_network(self, transitions):
+
         # pre-process the observation and goal
         o, o_next, g = transitions['obs'], transitions['obs_next'], transitions['g']
         transitions['obs'], transitions['g'] = self._preproc_og(o, g)
         transitions['obs_next'], transitions['g_next'] = self._preproc_og(o_next, g)
+
         # start to do the update
         obs_norm = self.o_norm.normalize(transitions['obs'])
         g_norm = self.g_norm.normalize(transitions['g'])
@@ -349,16 +417,19 @@ class DdpgHer(object):
         obs_next_norm = self.o_norm.normalize(transitions['obs_next'])
         g_next_norm = self.g_norm.normalize(transitions['g_next'])
         inputs_next_norm = np.concatenate([obs_next_norm, g_next_norm], axis=1)
+
         # transfer them into the tensor
         inputs_norm_tensor = torch.tensor(inputs_norm, dtype=torch.float32)
         inputs_next_norm_tensor = torch.tensor(inputs_next_norm, dtype=torch.float32)
         actions_tensor = torch.tensor(transitions['actions'], dtype=torch.float32)
-        r_tensor = torch.tensor(transitions['r'], dtype=torch.float32) 
+        r_tensor = torch.tensor(transitions['r'], dtype=torch.float32)
+
         if self.config['cuda']:
             inputs_norm_tensor = inputs_norm_tensor.cuda()
             inputs_next_norm_tensor = inputs_next_norm_tensor.cuda()
             actions_tensor = actions_tensor.cuda()
             r_tensor = r_tensor.cuda()
+
         # calculate the target Q value function
         with torch.no_grad():
             # do the normalization
@@ -371,23 +442,62 @@ class DdpgHer(object):
             # clip the q value
             clip_return = 1 / (1 - self.config['gamma'])
             target_q_value = torch.clamp(target_q_value, -clip_return, 0)
+
         # the q loss
         real_q_value = self.critic_network(inputs_norm_tensor, actions_tensor)
         critic_loss = (target_q_value - real_q_value).pow(2).mean()
+
+        # self.main.Q_tf ==> real_q_value
+        # self.main.Q_pi_tf ==> self.critic_network(inputs_norm_tensor, actions_real) ==> approx_q_value
+
         # the actor loss
+        action_l2 = self.config['action_l2']
         actions_real = self.actor_network(inputs_norm_tensor)
-        actor_loss = -self.critic_network(inputs_norm_tensor, actions_real).mean()
-        actor_loss += self.config['action_l2'] * (actions_real / self.env_params['action_max']).pow(2).mean()
-        # start to update the network
+        approx_q_value = self.critic_network(inputs_norm_tensor, actions_real)
+
+        if self.bc_loss:
+            # train with demonstrations using behavior cloning
+
+            # choose only the demo buffer samples
+            b_size = self.config['batch_size']
+            demo_b_size = self.config['demo_batch_size']
+            mask = np.concatenate((np.zeros(b_size - demo_b_size), np.ones(demo_b_size)), axis=0)
+            mask = torch.tensor(mask, dtype=torch.uint8, device=actions_real.device)
+
+            if self.q_filter:
+                # use Q-filter trick to perform BC only when needed
+                with torch.no_grad():
+                    mask &= (real_q_value > approx_q_value).squeeze()
+
+            prm_loss_weight = self.config['prm_loss_weight']
+            cloning_loss = self.config['aux_loss_weight'] * (actions_real[mask] - actions_tensor[mask]).pow(2).sum()
+        else:
+            # train without demonstrations
+            prm_loss_weight = 1.0
+            cloning_loss = None
+
+        actor_loss = -prm_loss_weight * approx_q_value.mean()
+        actor_loss += prm_loss_weight * action_l2 * (actions_real / self.env_params['action_max']).pow(2).mean()
+
+        if cloning_loss is not None:
+            actor_loss += cloning_loss
+
+        # update actor network
         self.actor_optim.zero_grad()
         actor_loss.backward()
         sync_grads(self.actor_network)
         self.actor_optim.step()
-        # update the critic_network
+
+        # update critic network
         self.critic_optim.zero_grad()
         critic_loss.backward()
         sync_grads(self.critic_network)
         self.critic_optim.step()
+
+        res = dict(actor_loss=actor_loss.item(), critic_loss=critic_loss.item())
+        if cloning_loss is not None:
+            res['cloning_loss'] = cloning_loss.item()
+        return res
 
     # do the evaluation
     def _eval_agent(self):
