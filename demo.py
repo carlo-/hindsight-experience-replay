@@ -7,14 +7,51 @@ from ddpg_agent import DdpgHer
 from train import OUT_DIR
 
 
-def demo(env, agent, steps=10000):
+def demo(env, agent, steps=10000, reset_on_success=True):
     obs = env.reset()
     for _ in range(steps):
         action = agent.predict(obs)
         obs, reward, done, _ = env.step(action)
         env.render()
+        if reward == 0.0:
+            print('Success!')
+            done = done or reset_on_success
         if done:
             obs = env.reset()
+
+
+def record_successes(env, agent, *, n=10, output_dir, single_file=True):
+    import imageio
+    frames = []
+    all_frames = []
+    obs = env.reset()
+
+    while len(all_frames) < n:
+
+        if obs['desired_goal'][2] < 0.48:
+            obs = env.reset()
+            continue
+
+        action = agent.predict(obs)
+        obs, reward, done, _ = env.step(action)
+        img = env.render(mode='rgb_array', rgb_options=dict(camera_id=-1))
+        frames.append(img)
+        if reward == 0.0:
+            print('Success!')
+            all_frames.append(frames)
+            done = True
+        if done:
+            frames = []
+            obs = env.reset()
+
+    if single_file:
+        all_frames = [sum(all_frames, [])]
+    for frames in all_frames:
+        if single_file:
+            file_path = f'{output_dir}/episodes.gif'
+        else:
+            file_path = f'{output_dir}/episode{len(all_frames)+1}.gif'
+        imageio.mimwrite(file_path, frames, fps=30)
 
 
 def evaluate(env, agent, episodes=200):
@@ -62,14 +99,24 @@ def plot_progress(csv_path):
 def main():
 
     # env = gym.make('FetchPickAndPlace-v1')
-    # local_dir = f'{OUT_DIR}/test3'
+    # local_dir = f'{OUT_DIR}/fetch_test/mordor'
 
-    env = gym.make('HandPickAndPlace-v0', ignore_rotation_ctrl=True, ignore_target_rotation=True, success_on_grasp_only=True)
-    local_dir = f'{OUT_DIR}/hand_pp_grasp_only/mordor'
+    env = gym.make(
+        'HandPickAndPlace-v0',
+        ignore_rotation_ctrl=True,
+        ignore_target_rotation=True,
+        success_on_grasp_only=False,
+        randomize_initial_arm_pos=True,
+        randomize_initial_object_pos=True,
+        distance_threshold=0.05
+    )
+    local_dir = f'{OUT_DIR}/hand_pp_parallel_arm_grasp_init/mordor'
 
-    plot_progress(f'{local_dir}/progress.csv')
-    agent = DdpgHer.load(env, local_dir, epoch=100)
-    demo(env, agent)
+    # plot_progress(f'{local_dir}/progress.csv')
+    agent = DdpgHer.load(env, local_dir, epoch=60)
+    demo(env, agent, reset_on_success=True)
+    # evaluate(env, agent, episodes=1000)
+    # record_successes(env, agent, output_dir=local_dir, n=10, single_file=True)
 
 
 if __name__ == '__main__':
