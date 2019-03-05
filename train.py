@@ -74,7 +74,7 @@ def simple_reporter(**kwargs):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pp_ldf'
+    local_dir = f'{OUT_DIR}/hand_pp_lfd'
     config = dict(
         env="HandPickAndPlace-v0",
         env_config=dict(
@@ -83,7 +83,9 @@ def main(spawn_children=False):
             success_on_grasp_only=False,
             randomize_initial_arm_pos=True,
             randomize_initial_object_pos=True,
-            distance_threshold=0.05,
+            distance_threshold=0.07,
+            grasp_state=True,
+            grasp_state_reset_p=0.2
         ),
         n_epochs=300,
         checkpoint_freq=2,
