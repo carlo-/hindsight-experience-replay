@@ -18,9 +18,13 @@ def init_env(env_id, env_config=None):
     return gym.make(env_id, **env_config)
 
 
-def train(config: dict=None):
+def train(config: dict):
 
-    if MPI.COMM_WORLD.Get_rank() == 0:
+    seed = config.get('seed', 42)
+    rank = MPI.COMM_WORLD.Get_rank()
+    rank_seed = seed + 1000000 * rank
+
+    if rank == 0:
         local_dir = config['local_dir']
         now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         local_dir = f'{local_dir}/{now}'
@@ -31,12 +35,14 @@ def train(config: dict=None):
         reporter = None
 
     env = init_env(config['env'], config.get('env_config'))
-    print(f'Environment with rank {MPI.COMM_WORLD.Get_rank()} ready.')
+    print(f'Environment with rank {rank} ready.')
     agent = DdpgHer(env, config, reporter)
+    agent.seed(rank_seed)
+    print(f'Worker with rank {rank} and seed {rank_seed} ready.')
     agent.train()
 
 
-def train_mpi(config: dict=None):
+def train_mpi(config: dict):
 
     comm = MPI.Comm.Get_parent()
     if comm == MPI.COMM_NULL:

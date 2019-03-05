@@ -3,7 +3,6 @@ import itertools as it
 import os
 import pickle
 from datetime import datetime
-from typing import Sequence
 
 import torch
 import numpy as np
@@ -131,6 +130,14 @@ class DdpgHer(object):
             self._init_demo_buffer(update_stats=True)
 
         self._trained = False
+        self.seed(self.config['seed'])
+
+    def seed(self, value):
+        import random
+        np.random.seed(value)
+        random.seed(value)
+        torch.manual_seed(value)
+        self.env.seed(value)
 
     def _training_step(self):
         rollout_times = []
@@ -317,6 +324,15 @@ class DdpgHer(object):
     def train(self):
         if self._trained:
             raise RuntimeError
+
+        # make sure that different workers have different seeds
+        # (from baselines' original implementation)
+        local_uniform = np.random.uniform(size=(1,))
+        root_uniform = local_uniform.copy()
+        MPI.COMM_WORLD.Bcast(root_uniform, root=0)
+        if MPI.COMM_WORLD.Get_rank() != 0:
+            assert local_uniform[0] != root_uniform[0]
+
         tic = datetime.now()
         n_epochs = self.config.get('n_epochs')
         saved_checkpoints = 0
