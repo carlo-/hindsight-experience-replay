@@ -119,5 +119,28 @@ def main():
     # record_successes(env, agent, output_dir=local_dir, n=10, single_file=True)
 
 
+def generate_hand_pp_demonstrations():
+    from gym.agents.shadow_hand import HandPickAndPlaceAgent
+    from utils import demonstrations_from_agent
+    env = gym.make(
+        'HandPickAndPlace-v0',
+        ignore_rotation_ctrl=True,
+        ignore_target_rotation=True,
+        randomize_initial_arm_pos=True,
+        randomize_initial_object_pos=True,
+        distance_threshold=0.05
+    )
+    agent = HandPickAndPlaceAgent(env)
+
+    def should_skip_episode(obs):
+        if obs['desired_goal'][2] < 0.48:
+            # desired goal is too close to the table
+            return True
+        return False
+
+    demonstrations_from_agent(env, agent, n=100, output_path='./out/demonstrations/hand_demo_100.pkl',
+                              render=True, skip_episode=should_skip_episode)
+
+
 if __name__ == '__main__':
     main()

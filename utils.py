@@ -1,7 +1,81 @@
+import pickle
+import copy
+from time import sleep
+
 from mpi4py import MPI
 import pandas as pd
 import numpy as np
 import torch
+
+
+def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None):
+
+    data = {k: [] for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions']}
+    while len(data['mb_obs']) < n:
+
+        ep_sim_states = []
+        ep_data = {k: [] for k in ['obs', 'ag', 'g', 'actions']}
+        done = False
+        success = False
+
+        obs = env.reset()
+        goal = obs['desired_goal'].copy()
+        if callable(skip_episode) and skip_episode(obs):
+            # episode not interesting enough => skip
+            continue
+
+        while not done:
+            action = agent.predict(obs)
+
+            ep_data['obs'].append(obs['observation'].copy())
+            ep_data['ag'].append(obs['achieved_goal'].copy())
+            ep_data['g'].append(goal.copy())
+            ep_data['actions'].append(action.copy())
+
+            obs, reward, done, _ = env.step(action)
+            ep_sim_states.append(copy.deepcopy(env.unwrapped.sim.get_state()))
+            success = reward == 0.0 and done
+        ep_data['obs'].append(obs['observation'].copy())
+        ep_data['ag'].append(obs['achieved_goal'].copy())
+
+        if success:
+            for k in ep_data.keys():
+                data['mb_' + k].append(ep_data[k])
+            print(f'{len(data["mb_obs"])}/{n} demonstrations recorded.')
+
+            if render:
+                for s in ep_sim_states:
+                    env.unwrapped.sim.set_state(s)
+                    env.unwrapped.sim.forward()
+                    env.render()
+                    sleep(0.01)
+
+    for k in data.keys():
+        data[k] = np.array(data[k])
+
+    if output_path is not None:
+        pickle.dump(data, open(output_path, 'wb'))
+    return data
+
+
+def convert_baselines_demonstrations(file_path, *, output_path=None, max_ep_len):
+    orig_data = np.load(file_path)
+    orig_data_obs = orig_data['obs']
+    orig_data_acs = orig_data['acs']
+
+    data = dict(
+        mb_obs=[[step['observation'] for step in ep[:(max_ep_len+1)]] for ep in orig_data_obs],
+        mb_ag=[[step['achieved_goal'] for step in ep[:(max_ep_len+1)]] for ep in orig_data_obs],
+        mb_g=[[step['desired_goal'] for step in ep[:max_ep_len]] for ep in orig_data_obs],
+        mb_actions=[ep[:max_ep_len] for ep in orig_data_acs]
+    )
+
+    for k in data.keys():
+        data[k] = np.asarray(data[k])
+
+    if output_path is not None:
+        pickle.dump(data, open(output_path, 'wb'))
+    return data
 
 
 class StdoutReporter:
