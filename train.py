@@ -85,15 +85,15 @@ def main(spawn_children=False):
             randomize_initial_object_pos=True,
             distance_threshold=0.07,
             grasp_state=True,
-            grasp_state_reset_p=0.1
+            grasp_state_reset_p=0.2
         ),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
-        hidden_units=400,
-        q_filter=True,
+        q_filter=False,
         demo_batch_size=128,
-        demo_file='./demonstrations/hand_demo_100.pkl',
+        demo_file='./demonstrations/hand_demo_500_sim.pkl',
+        num_demo=500,
     )
 
     if spawn_children:
