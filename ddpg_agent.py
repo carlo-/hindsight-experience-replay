@@ -237,10 +237,9 @@ class DdpgHer(object):
         self.demo_buffer = ReplayBuffer(self.env_params, self.config['buffer_size'],
                                         self.her_module.sample_her_transitions)
 
-        # data must be a dictionary of 4 lists; each list contains partial information for each episode.
+        # data must be a dictionary of (at least) 4 lists; each list contains partial information for each episode.
         data = pickle.load(open(file_path, 'rb'))
         assert isinstance(data, dict)
-        assert len(data) == 4
 
         ordered_data = []
         for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions']:

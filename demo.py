@@ -138,8 +138,8 @@ def generate_hand_pp_demonstrations():
             return True
         return False
 
-    demonstrations_from_agent(env, agent, n=100, output_path='./out/demonstrations/hand_demo_100.pkl',
-                              render=True, skip_episode=should_skip_episode)
+    demonstrations_from_agent(env, agent, n=500, output_path='./demonstrations/hand_demo_500_sim.pkl',
+                              render=False, skip_episode=should_skip_episode)
 
 
 if __name__ == '__main__':

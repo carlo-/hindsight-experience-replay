@@ -10,11 +10,10 @@ import torch
 
 def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None):
 
-    data = {k: [] for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions']}
+    data = {k: [] for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions', 'mb_sim_states']}
     while len(data['mb_obs']) < n:
 
-        ep_sim_states = []
-        ep_data = {k: [] for k in ['obs', 'ag', 'g', 'actions']}
+        ep_data = {k: [] for k in ['obs', 'ag', 'g', 'actions', 'sim_states']}
         done = False
         success = False
 
@@ -31,12 +30,13 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             ep_data['ag'].append(obs['achieved_goal'].copy())
             ep_data['g'].append(goal.copy())
             ep_data['actions'].append(action.copy())
+            ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
             obs, reward, done, _ = env.step(action)
-            ep_sim_states.append(copy.deepcopy(env.unwrapped.sim.get_state()))
             success = reward == 0.0 and done
         ep_data['obs'].append(obs['observation'].copy())
         ep_data['ag'].append(obs['achieved_goal'].copy())
+        ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
         if success:
             for k in ep_data.keys():
@@ -44,13 +44,15 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             print(f'{len(data["mb_obs"])}/{n} demonstrations recorded.')
 
             if render:
-                for s in ep_sim_states:
-                    env.unwrapped.sim.set_state(s)
+                for s in ep_data['sim_states']:
+                    env.unwrapped.sim.set_state(copy.deepcopy(s))
                     env.unwrapped.sim.forward()
                     env.render()
                     sleep(0.01)
 
     for k in data.keys():
+        if 'sim' in k:
+            continue
         data[k] = np.array(data[k])
 
     if output_path is not None:
