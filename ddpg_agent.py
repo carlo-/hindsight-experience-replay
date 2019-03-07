@@ -99,8 +99,8 @@ class DdpgHer(object):
         sync_networks(self.critic_network)
 
         # build up the target network
-        self.actor_target_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
-        self.critic_target_network = CriticNetwork(action_space=a_space, observation_space=obs_space)
+        self.actor_target_network = ActorNetwork(action_space=a_space, observation_space=obs_space, hidden_units=self.config['hidden_units'])
+        self.critic_target_network = CriticNetwork(action_space=a_space, observation_space=obs_space, hidden_units=self.config['hidden_units'])
 
         # load the weights into the target networks
         self.actor_target_network.load_state_dict(self.actor_network.state_dict())
