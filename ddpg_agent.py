@@ -43,6 +43,7 @@ class DdpgHer(object):
         'replay_k': 4,
         'clip_obs': 200.,
         'batch_size': 256,
+        'hidden_units': 256,
         'gamma': 0.98,
         'action_l2': 1.,
         'lr_actor': 0.001,
@@ -90,8 +91,8 @@ class DdpgHer(object):
         self.q_filter = self.config['q_filter']
 
         # create the network
-        self.actor_network = ActorNetwork(action_space=a_space, observation_space=obs_space)
-        self.critic_network = CriticNetwork(action_space=a_space, observation_space=obs_space)
+        self.actor_network = ActorNetwork(action_space=a_space, observation_space=obs_space, hidden_units=self.config['hidden_units'])
+        self.critic_network = CriticNetwork(action_space=a_space, observation_space=obs_space, hidden_units=self.config['hidden_units'])
 
         # sync the networks across the cpus
         sync_networks(self.actor_network)

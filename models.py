@@ -10,16 +10,16 @@ the input x in both networks should be [o, g], where o is the observation and g 
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, *, action_space: Box, observation_space: Dict):
+    def __init__(self, *, action_space: Box, observation_space: Dict, hidden_units: int):
         super(ActorNetwork, self).__init__()
 
         obs_size = observation_space.spaces['observation'].shape[0]
         goal_size = observation_space.spaces['desired_goal'].shape[0]
 
-        self.fc1 = nn.Linear(obs_size + goal_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 256)
-        self.action_out = nn.Linear(256, action_space.shape[0])
+        self.fc1 = nn.Linear(obs_size + goal_size, hidden_units)
+        self.fc2 = nn.Linear(hidden_units, hidden_units)
+        self.fc3 = nn.Linear(hidden_units, hidden_units)
+        self.action_out = nn.Linear(hidden_units, action_space.shape[0])
         self.max_action = action_space.high[0]
 
     def forward(self, x):
@@ -32,16 +32,16 @@ class ActorNetwork(nn.Module):
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, *, action_space: Box, observation_space: Dict):
+    def __init__(self, *, action_space: Box, observation_space: Dict, hidden_units: int):
         super(CriticNetwork, self).__init__()
 
         obs_size = observation_space.spaces['observation'].shape[0]
         goal_size = observation_space.spaces['desired_goal'].shape[0]
 
-        self.fc1 = nn.Linear(obs_size + goal_size + action_space.shape[0], 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 256)
-        self.q_out = nn.Linear(256, 1)
+        self.fc1 = nn.Linear(obs_size + goal_size + action_space.shape[0], hidden_units)
+        self.fc2 = nn.Linear(hidden_units, hidden_units)
+        self.fc3 = nn.Linear(hidden_units, hidden_units)
+        self.q_out = nn.Linear(hidden_units, 1)
         self.max_action = action_space.high[0]
 
     def forward(self, x, actions):
