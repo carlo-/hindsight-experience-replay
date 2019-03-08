@@ -85,7 +85,8 @@ def main(spawn_children=False):
             randomize_initial_object_pos=True,
             distance_threshold=0.07,
             grasp_state=True,
-            grasp_state_reset_p=0.2
+            grasp_state_reset_p=0.2,
+            target_in_the_air_p=0.9
         ),
         n_epochs=500,
         checkpoint_freq=1,
