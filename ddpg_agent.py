@@ -55,6 +55,7 @@ class DdpgHer(object):
         'local_dir': None,
         'cuda': None,
         'rollouts_per_worker': 2,
+        'goal_space_bins': None,
         'q_filter': False,
         'prm_loss_weight': 0.001,
         'aux_loss_weight': 0.0078,
@@ -68,6 +69,8 @@ class DdpgHer(object):
 
         self.env = env
         self.config = {**DdpgHer._default_config, **config}
+        self.seed(self.config['seed'])
+
         a_space, obs_space = self.env.action_space, self.env.observation_space
         obs_size = obs_space.spaces['observation'].shape[0]
         goal_size = obs_space.spaces['desired_goal'].shape[0]
@@ -130,8 +133,25 @@ class DdpgHer(object):
         if self.bc_loss:
             self._init_demo_buffer(update_stats=True)
 
+        # goal_space_bins should be of the form:
+        # [dict(axis=0, box=np.linspace(0.0, 2.0, 15)), dict(axis=1, box=np.linspace(0.0, 2.0, 15)), ...]
+        self._num_reached_goals_in_bin = None
+        self._goal_space_bins = self.config['goal_space_bins']
+        if self._goal_space_bins is not None:
+            self._num_reached_goals_in_bin = np.zeros(tuple(1 + b['box'].size for b in self._goal_space_bins))
+
         self._trained = False
-        self.seed(self.config['seed'])
+
+    def _bin_idx_for_goals(self, goals: np.ndarray):
+        assert self._goal_space_bins is not None
+        return tuple(np.digitize(goals[..., b['axis']], b['box'], right=False) for b in self._goal_space_bins)
+
+    def _get_weights_for_goals(self, goals: np.ndarray):
+        assert self._goal_space_bins is not None
+        idx = self._bin_idx_for_goals(goals)
+        counts = self._num_reached_goals_in_bin[idx]
+        a = 1.
+        return a / (a + counts)
 
     def seed(self, value):
         import random
@@ -170,6 +190,11 @@ class DdpgHer(object):
                     taken_steps += 1
                     obs_new = observation_new['observation']
                     ag_new = observation_new['achieved_goal']
+
+                    if self._goal_space_bins is not None and bool(info['is_success']):
+                        goal_idx = self._bin_idx_for_goals(ag_new)
+                        self._num_reached_goals_in_bin[goal_idx] += 1
+
                     # append rollouts
                     ep_obs.append(obs.copy())
                     ep_ag.append(ag.copy())
@@ -253,9 +278,12 @@ class DdpgHer(object):
 
     def _sample_batch(self):
         batch_size = self.config['batch_size']
+        sample_kwargs = dict()
+        if self._goal_space_bins is not None:
+            sample_kwargs['get_weights_for_goals'] = self._get_weights_for_goals
         if self.bc_loss:
             demo_batch_size = self.config['demo_batch_size']
-            transitions = self.buffer.sample(batch_size - demo_batch_size)
+            transitions = self.buffer.sample(batch_size - demo_batch_size, **sample_kwargs)
             transitions_demo = self.demo_buffer.sample(demo_batch_size)
             for k, values in transitions_demo.items():
                 rollout_vec = transitions[k].tolist()
@@ -263,7 +291,7 @@ class DdpgHer(object):
                     rollout_vec.append(v.tolist())
                 transitions[k] = np.array(rollout_vec)
         else:
-            transitions = self.buffer.sample(batch_size)
+            transitions = self.buffer.sample(batch_size, **sample_kwargs)
         return transitions
 
     def save_checkpoint(self, epoch=0):

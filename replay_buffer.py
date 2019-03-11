@@ -35,7 +35,7 @@ class ReplayBuffer:
             self.n_transitions_stored += self.T * batch_size
     
     # sample the data from the replay buffer
-    def sample(self, batch_size):
+    def sample(self, batch_size, **kwargs):
         buffers = {}
         with self.lock:
             for key in self.buffers.keys():
@@ -43,7 +43,7 @@ class ReplayBuffer:
         buffers['obs_next'] = buffers['obs'][:, 1:, :]
         buffers['ag_next'] = buffers['ag'][:, 1:, :]
         # sample transitions
-        transitions = self.sample_func(buffers, batch_size)
+        transitions = self.sample_func(buffers, batch_size, **kwargs)
         return transitions
 
     def _get_storage_idx(self, inc=None):
