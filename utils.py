@@ -32,8 +32,8 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             ep_data['actions'].append(action.copy())
             ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
-            obs, reward, done, _ = env.step(action)
-            success = reward == 0.0 and done
+            obs, reward, done, info = env.step(action)
+            success = info['is_success'] and done
         ep_data['obs'].append(obs['observation'].copy())
         ep_data['ag'].append(obs['achieved_goal'].copy())
         ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
