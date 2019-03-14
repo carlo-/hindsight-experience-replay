@@ -145,7 +145,7 @@ def generate_hand_pp_demonstrations():
 def generate_yumi_reach_demonstrations():
     from gym.agents.yumi import YumiReachAgent
     from utils import demonstrations_from_agent
-    env = gym.make('YumiReachLeftArm-v0')
+    env = gym.make('YumiReachLeftArm-v0', reward_type='sparse')
     agent = YumiReachAgent(env)
     file_path = './demonstrations/yumi_reach_left_arm_100.pkl'
     demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
