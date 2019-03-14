@@ -3,7 +3,7 @@ import numpy as np
 
 class HerSampler:
 
-    def __init__(self, replay_strategy, replay_k, reward_func=None):
+    def __init__(self, replay_strategy, replay_k, reward_func=None, *, weight_sampling, weight_rewards):
         self.replay_strategy = replay_strategy
         self.replay_k = replay_k
         if self.replay_strategy == 'future':
@@ -11,6 +11,8 @@ class HerSampler:
         else:
             self.future_p = 0
         self.reward_func = reward_func
+        self.weight_sampling = weight_sampling
+        self.weight_rewards = weight_rewards
 
     def sample_her_transitions(self, episode_batch, batch_size_in_transitions, *, get_weights_for_goals=None):
 
@@ -19,7 +21,12 @@ class HerSampler:
         batch_size = batch_size_in_transitions
 
         # select which rollouts and which timesteps to be used
-        episode_idxs = np.random.randint(0, rollout_batch_size, batch_size)
+        if self.weight_sampling and callable(get_weights_for_goals):
+            all_goals = episode_batch['g'][:, 0]
+            weights = get_weights_for_goals(all_goals) # this may be expensive when buffer is large
+            episode_idxs = np.random.choice(rollout_batch_size, p=weights, size=batch_size)
+        else:
+            episode_idxs = np.random.randint(0, rollout_batch_size, batch_size)
         t_samples = np.random.randint(T, size=batch_size)
         transitions = {key: episode_batch[key][episode_idxs, t_samples].copy() for key in episode_batch.keys()}
 
@@ -34,7 +41,7 @@ class HerSampler:
         transitions['g'][her_indexes] = future_ag
 
         info = None
-        if callable(get_weights_for_goals):
+        if self.weight_rewards and callable(get_weights_for_goals):
             info = dict(weights=get_weights_for_goals(transitions['g']))
 
         # to get the params to re-compute reward

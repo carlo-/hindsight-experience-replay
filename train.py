@@ -2,6 +2,7 @@ import sys
 import os
 from datetime import datetime
 
+import numpy as np
 from mpi4py import MPI
 
 from ddpg_agent import DdpgHer
@@ -68,33 +69,22 @@ def train_mpi(config: dict):
         print('Done.')
 
 
-def simple_reporter(**kwargs):
-    print(kwargs)
-
-
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pp_lfd'
+    local_dir = f'{OUT_DIR}/fetch_weighted_her/w2_unbiased'
     config = dict(
-        env="HandPickAndPlace-v0",
-        env_config=dict(
-            ignore_rotation_ctrl=True,
-            ignore_target_rotation=True,
-            success_on_grasp_only=False,
-            randomize_initial_arm_pos=True,
-            randomize_initial_object_pos=True,
-            distance_threshold=0.05,
-            grasp_state=True,
-            grasp_state_reset_p=0.2,
-            target_in_the_air_p=1.0
-        ),
+        env="FetchPickAndPlace-v1",
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
-        q_filter=True,
-        demo_batch_size=128,
-        demo_file='./demonstrations/hand_demo_500_sim.pkl',
-        num_demo=500,
+
+        goal_weighting_remove_bias=True,
+        goal_weighting_param=2.,
+        goal_space_bins=[
+            dict(axis=0, box=np.linspace(1.05, 1.55, 5)), # x axis
+            dict(axis=1, box=np.linspace(0.40, 1.10, 5)), # y axis
+            dict(axis=2, box=np.linspace(0.40, 0.90, 5)), # z axis
+        ],
     )
 
     if spawn_children:

@@ -56,6 +56,8 @@ class DdpgHer(object):
         'cuda': None,
         'rollouts_per_worker': 2,
         'goal_space_bins': None,
+        'goal_weighting_param': 6.,
+        'goal_weighting_remove_bias': False,
         'q_filter': False,
         'prm_loss_weight': 0.001,
         'aux_loss_weight': 0.0078,
@@ -120,8 +122,23 @@ class DdpgHer(object):
         self.actor_optim = torch.optim.Adam(self.actor_network.parameters(), lr=self.config['lr_actor'])
         self.critic_optim = torch.optim.Adam(self.critic_network.parameters(), lr=self.config['lr_critic'])
 
+        # goal_space_bins should be of the form:
+        # [dict(axis=0, box=np.linspace(0.0, 2.0, 15)), dict(axis=1, box=np.linspace(0.0, 2.0, 15)), ...]
+        weight_her_sampling = False
+        self._num_reached_goals_in_bin = None
+        self._num_visited_goals_in_bin = None
+        self._goal_space_bins = self.config['goal_space_bins']
+        self._goal_weighting_param = self.config['goal_weighting_param']
+        self._goal_weighting_remove_bias = self.config['goal_weighting_remove_bias']
+        assert self._goal_weighting_param >= 0.
+        if self._goal_space_bins is not None:
+            weight_her_sampling = True
+            self._num_reached_goals_in_bin = np.zeros(tuple(1 + b['box'].size for b in self._goal_space_bins))
+            self._num_visited_goals_in_bin = self._num_reached_goals_in_bin.copy()
+
         # her sampler
-        self.her_module = HerSampler(self.config['replay_strategy'], self.config['replay_k'], self.env.compute_reward)
+        self.her_module = HerSampler(self.config['replay_strategy'], self.config['replay_k'], self.env.compute_reward,
+                                     weight_rewards=False, weight_sampling=weight_her_sampling)
 
         # create the normalizer
         self.o_norm = Normalizer(size=obs_size, default_clip_range=self.config['clip_range'])
@@ -133,13 +150,6 @@ class DdpgHer(object):
         if self.bc_loss:
             self._init_demo_buffer(update_stats=True)
 
-        # goal_space_bins should be of the form:
-        # [dict(axis=0, box=np.linspace(0.0, 2.0, 15)), dict(axis=1, box=np.linspace(0.0, 2.0, 15)), ...]
-        self._num_reached_goals_in_bin = None
-        self._goal_space_bins = self.config['goal_space_bins']
-        if self._goal_space_bins is not None:
-            self._num_reached_goals_in_bin = np.zeros(tuple(1 + b['box'].size for b in self._goal_space_bins))
-
         self._trained = False
 
     def _bin_idx_for_goals(self, goals: np.ndarray):
@@ -150,8 +160,15 @@ class DdpgHer(object):
         assert self._goal_space_bins is not None
         idx = self._bin_idx_for_goals(goals)
         counts = self._num_reached_goals_in_bin[idx]
-        a = 1.
-        return a / (a + counts)
+        a = self._goal_weighting_param
+        weights = a / (a + counts)
+        weights /= weights.sum()
+        if self._goal_weighting_remove_bias:
+            total_visits = self._num_visited_goals_in_bin[idx] + 1e-5
+            total_visits /= total_visits.sum()
+            weights *= total_visits
+            weights /= weights.sum()
+        return weights
 
     def seed(self, value):
         import random
@@ -191,9 +208,11 @@ class DdpgHer(object):
                     obs_new = observation_new['observation']
                     ag_new = observation_new['achieved_goal']
 
-                    if self._goal_space_bins is not None and bool(info['is_success']):
+                    if self._goal_space_bins is not None:
                         goal_idx = self._bin_idx_for_goals(ag_new)
-                        self._num_reached_goals_in_bin[goal_idx] += 1
+                        self._num_visited_goals_in_bin[goal_idx] += 1
+                        if bool(info['is_success']):
+                            self._num_reached_goals_in_bin[goal_idx] += 1
 
                     # append rollouts
                     ep_obs.append(obs.copy())
@@ -364,11 +383,13 @@ class DdpgHer(object):
         tic = datetime.now()
         n_epochs = self.config.get('n_epochs')
         saved_checkpoints = 0
+        total_env_steps = 0
 
         for iter_i in it.count():
             if n_epochs is not None and iter_i >= n_epochs:
                 break
             res = self._training_step()
+            total_env_steps += res['env_steps']
 
             if MPI.COMM_WORLD.Get_rank() == 0:
                 if (iter_i + 1) % self.config['checkpoint_freq'] == 0:
@@ -379,7 +400,9 @@ class DdpgHer(object):
                         **res,
                         "training_iteration": iter_i + 1,
                         "total_time": (datetime.now() - tic).total_seconds(),
-                        "checkpoints": saved_checkpoints
+                        "checkpoints": saved_checkpoints,
+                        "total_env_steps": total_env_steps,
+                        "current_buffer_size": self.buffer.current_size,
                     })
 
     # pre_process the inputs
