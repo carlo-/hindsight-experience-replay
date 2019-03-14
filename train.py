@@ -71,20 +71,13 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/fetch_weighted_her/w2_unbiased'
+    local_dir = f'{OUT_DIR}/yumi_reach_test2'
     config = dict(
-        env="FetchPickAndPlace-v1",
+        env="YumiReachLeftArm-v0",
+        env_config=dict(reward_type='sparse'),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
-
-        goal_weighting_remove_bias=True,
-        goal_weighting_param=2.,
-        goal_space_bins=[
-            dict(axis=0, box=np.linspace(1.05, 1.55, 5)), # x axis
-            dict(axis=1, box=np.linspace(0.40, 1.10, 5)), # y axis
-            dict(axis=2, box=np.linspace(0.40, 0.90, 5)), # z axis
-        ],
     )
 
     if spawn_children:
