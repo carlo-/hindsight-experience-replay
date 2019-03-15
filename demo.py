@@ -6,6 +6,9 @@ from tqdm import tqdm
 from ddpg_agent import DdpgHer
 from train import OUT_DIR
 
+REMOTE_OUT_DIR = f'/run/user/1000/gvfs/sftp:host=mordor.csc.kth.se,port=2222,user=carlora/home/carlora/thesis/exp/hindsight-experience-replay/out/her_torch/'
+
+
 
 def demo(env, agent, steps=10000, reset_on_success=True):
     obs = env.reset()
@@ -101,20 +104,14 @@ def main():
     # env = gym.make('FetchPickAndPlace-v1')
     # local_dir = f'{OUT_DIR}/fetch_test/mordor'
 
-    env = gym.make(
-        'HandPickAndPlace-v0',
-        ignore_rotation_ctrl=True,
-        ignore_target_rotation=True,
-        success_on_grasp_only=False,
-        randomize_initial_arm_pos=True,
-        randomize_initial_object_pos=True,
-        distance_threshold=0.05
-    )
-    local_dir = f'{OUT_DIR}/hand_pp_parallel_arm_grasp_init/mordor'
+    env = gym.make('YumiReachLeftArm-v0')
+    local_dir = f'{REMOTE_OUT_DIR}/yumi_reach_test3'
+    import glob
+    local_dir = glob.glob(local_dir + '/*/checkpoints')[0]
 
     # plot_progress(f'{local_dir}/progress.csv')
-    agent = DdpgHer.load(env, local_dir, epoch=60)
-    demo(env, agent, reset_on_success=True)
+    agent = DdpgHer.load(env, local_dir)
+    demo(env, agent, reset_on_success=False)
     # evaluate(env, agent, episodes=1000)
     # record_successes(env, agent, output_dir=local_dir, n=10, single_file=True)
 
@@ -145,9 +142,9 @@ def generate_hand_pp_demonstrations():
 def generate_yumi_reach_demonstrations():
     from gym.agents.yumi import YumiReachAgent
     from utils import demonstrations_from_agent
-    env = gym.make('YumiReachLeftArm-v0', reward_type='sparse')
+    env = gym.make('YumiReachTwoArms-v0', reward_type='sparse')
     agent = YumiReachAgent(env)
-    file_path = './demonstrations/yumi_reach_left_arm_100.pkl'
+    file_path = './demonstrations/yumi_reach_two_arms_100.pkl'
     demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
 
 

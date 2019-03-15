@@ -71,16 +71,16 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_reach_test3'
+    local_dir = f'{OUT_DIR}/yumi_reach_test4'
     config = dict(
-        env="YumiReachLeftArm-v0",
+        env="YumiReachTwoArms-v0",
         env_config=dict(reward_type='sparse'),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
         q_filter=True,
         demo_batch_size=128,
-        demo_file='./demonstrations/yumi_reach_left_arm_100.pkl',
+        demo_file='./demonstrations/yumi_reach_two_arms_100.pkl',
         num_demo=100,
     )
 
