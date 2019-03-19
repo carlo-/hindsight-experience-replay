@@ -56,8 +56,7 @@ class DdpgHer(object):
         'cuda': None,
         'rollouts_per_worker': 2,
         'goal_space_bins': None,
-        'goal_weighting_param': 6.,
-        'goal_weighting_remove_bias': False,
+        'archer_params': None,
         'q_filter': False,
         'prm_loss_weight': 0.001,
         'aux_loss_weight': 0.0078,
@@ -127,18 +126,17 @@ class DdpgHer(object):
         weight_her_sampling = False
         self._num_reached_goals_in_bin = None
         self._num_visited_goals_in_bin = None
+        self._num_observed_goals_in_bin = None
         self._goal_space_bins = self.config['goal_space_bins']
-        self._goal_weighting_param = self.config['goal_weighting_param']
-        self._goal_weighting_remove_bias = self.config['goal_weighting_remove_bias']
-        assert self._goal_weighting_param >= 0.
         if self._goal_space_bins is not None:
             weight_her_sampling = True
             self._num_reached_goals_in_bin = np.zeros(tuple(1 + b['box'].size for b in self._goal_space_bins))
             self._num_visited_goals_in_bin = self._num_reached_goals_in_bin.copy()
+            self._num_observed_goals_in_bin = self._num_reached_goals_in_bin.copy()
 
         # her sampler
         self.her_module = HerSampler(self.config['replay_strategy'], self.config['replay_k'], self.env.compute_reward,
-                                     weight_rewards=False, weight_sampling=weight_her_sampling)
+                                     weight_sampling=weight_her_sampling, archer_params=self.config['archer_params'])
 
         # create the normalizer
         self.o_norm = Normalizer(size=obs_size, default_clip_range=self.config['clip_range'])
@@ -156,19 +154,20 @@ class DdpgHer(object):
         assert self._goal_space_bins is not None
         return tuple(np.digitize(goals[..., b['axis']], b['box'], right=False) for b in self._goal_space_bins)
 
-    def _get_weights_for_goals(self, goals: np.ndarray):
+    def _get_info_for_goals(self, goals: np.ndarray):
         assert self._goal_space_bins is not None
         idx = self._bin_idx_for_goals(goals)
-        counts = self._num_reached_goals_in_bin[idx]
-        a = self._goal_weighting_param
-        weights = a / (a + counts)
-        weights /= weights.sum()
-        if self._goal_weighting_remove_bias:
-            total_visits = self._num_visited_goals_in_bin[idx] + 1e-5
-            total_visits /= total_visits.sum()
-            weights *= total_visits
-            weights /= weights.sum()
-        return weights
+        times_success = self._num_reached_goals_in_bin[idx]
+        times_visited = self._num_visited_goals_in_bin[idx]
+        times_observed = self._num_observed_goals_in_bin[idx]
+        tot_success = self._num_reached_goals_in_bin.sum()
+        tot_visited = self._num_visited_goals_in_bin.sum()
+        tot_observed = self._num_observed_goals_in_bin.sum()
+        return (
+            times_success, tot_success,
+            times_visited, tot_visited,
+            times_observed, tot_observed,
+        )
 
     def seed(self, value):
         import random
@@ -196,6 +195,11 @@ class DdpgHer(object):
                 obs = observation['observation']
                 ag = observation['achieved_goal']
                 g = observation['desired_goal']
+
+                if self._goal_space_bins is not None:
+                    goal_idx = self._bin_idx_for_goals(g)
+                    self._num_observed_goals_in_bin[goal_idx] += 1
+
                 # start to collect samples
                 for t in range(self.env_params['max_timesteps']):
                     with torch.no_grad():
@@ -299,7 +303,7 @@ class DdpgHer(object):
         batch_size = self.config['batch_size']
         sample_kwargs = dict()
         if self._goal_space_bins is not None:
-            sample_kwargs['get_weights_for_goals'] = self._get_weights_for_goals
+            sample_kwargs['get_info_for_goals'] = self._get_info_for_goals
         if self.bc_loss:
             demo_batch_size = self.config['demo_batch_size']
             transitions = self.buffer.sample(batch_size - demo_batch_size, **sample_kwargs)
