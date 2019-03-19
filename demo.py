@@ -104,8 +104,8 @@ def main():
     # env = gym.make('FetchPickAndPlace-v1')
     # local_dir = f'{OUT_DIR}/fetch_test/mordor'
 
-    env = gym.make('YumiReachLeftArm-v0')
-    local_dir = f'{REMOTE_OUT_DIR}/yumi_reach_test3'
+    env = gym.make('YumiReachTwoArms-v0')
+    local_dir = f'{REMOTE_OUT_DIR}/yumi_reach_test4'
     import glob
     local_dir = glob.glob(local_dir + '/*/checkpoints')[0]
 
@@ -145,6 +145,15 @@ def generate_yumi_reach_demonstrations():
     env = gym.make('YumiReachTwoArms-v0', reward_type='sparse')
     agent = YumiReachAgent(env)
     file_path = './demonstrations/yumi_reach_two_arms_100.pkl'
+    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
+
+
+def generate_yumi_bar_demonstrations():
+    from gym.agents.yumi import YumiBarAgent
+    from utils import demonstrations_from_agent
+    env = gym.make('YumiBar-v1', reward_type='sparse')
+    agent = YumiBarAgent(env)
+    file_path = './demonstrations/yumi_bar_100.pkl'
     demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
 
 
