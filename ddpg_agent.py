@@ -9,7 +9,7 @@ import numpy as np
 from mpi4py import MPI
 
 from models import ActorNetwork, CriticNetwork
-from utils import sync_networks, sync_grads
+from utils import sync_networks, sync_grads, MujocoException
 from replay_buffer import ReplayBuffer
 from normalizer import Normalizer
 from her import HerSampler
@@ -181,13 +181,15 @@ class DdpgHer(object):
         update_times = []
         update_results = []
         taken_steps = 0
+        failed_steps = 0
         sampling_tot_time = 0.0
         sampling_calls = 0
         step_tic = datetime.now()
         for _ in range(self.config['n_cycles']):
             mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
-            for _ in range(self.config["rollouts_per_worker"]):
+            while len(mb_obs) < self.config["rollouts_per_worker"]:
                 tic = datetime.now()
+                step_failure = False
                 # reset the rollouts
                 ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
                 # reset the environment
@@ -206,9 +208,13 @@ class DdpgHer(object):
                         input_tensor = self._preproc_inputs(obs, g)
                         pi = self.actor_network(input_tensor)
                         action = self._select_actions(pi)
-                    # feed the actions into the environment
-                    observation_new, _, _, info = self.env.step(action)
-                    taken_steps += 1
+
+                    try:
+                        observation_new, _, _, info = self.env.step(action)
+                    except MujocoException:
+                        step_failure = True
+                        break
+
                     obs_new = observation_new['observation']
                     ag_new = observation_new['achieved_goal']
 
@@ -228,6 +234,12 @@ class DdpgHer(object):
                     ag = ag_new
                 ep_obs.append(obs.copy())
                 ep_ag.append(ag.copy())
+
+                if step_failure:
+                    failed_steps += 1
+                    continue
+
+                taken_steps += self.env_params['max_timesteps']
                 mb_obs.append(ep_obs)
                 mb_ag.append(ep_ag)
                 mb_g.append(ep_g)
@@ -275,6 +287,7 @@ class DdpgHer(object):
             "evaluation_time": eval_time,
             "step_time": step_time,
             "env_steps": taken_steps,
+            "failed_steps": failed_steps,
             **update_results_dict,
         }
 

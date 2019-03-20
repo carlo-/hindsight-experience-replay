@@ -142,6 +142,17 @@ class MultiReporter:
             r(**kwargs)
 
 
+class NeverMatch(Exception):
+    """An exception class that is never raised by any code anywhere"""
+
+
+try:
+    import mujoco_py
+    MujocoException = mujoco_py.MujocoException
+except (ImportError, ModuleNotFoundError):
+    MujocoException = NeverMatch
+
+
 # sync_networks across the different cores
 def sync_networks(network):
     """
