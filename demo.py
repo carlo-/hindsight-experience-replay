@@ -153,8 +153,8 @@ def generate_yumi_bar_demonstrations():
     from utils import demonstrations_from_agent
     env = gym.make('YumiBar-v1', reward_type='sparse')
     agent = YumiBarAgent(env)
-    file_path = './demonstrations/yumi_bar_100.pkl'
-    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
+    file_path = './demonstrations/yumi_bar_200.pkl'
+    demonstrations_from_agent(env, agent, n=200, output_path=file_path, render=False)
 
 
 if __name__ == '__main__':

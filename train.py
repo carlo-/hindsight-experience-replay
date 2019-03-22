@@ -71,7 +71,7 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_bar_test1'
+    local_dir = f'{OUT_DIR}/yumi_bar_test2'
     config = dict(
         env="YumiBar-v1",
         env_config=dict(reward_type='sparse'),
@@ -80,8 +80,8 @@ def main(spawn_children=False):
         local_dir=local_dir,
         q_filter=True,
         demo_batch_size=128,
-        demo_file='./demonstrations/yumi_bar_100.pkl',
-        num_demo=100,
+        demo_file='./demonstrations/yumi_bar_200.pkl',
+        num_demo=200,
     )
 
     if spawn_children:
