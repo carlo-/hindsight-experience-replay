@@ -71,17 +71,29 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_bar_test2'
+    local_dir = f'{OUT_DIR}/hand_pp_small_sphere_lfd'
     config = dict(
-        env="YumiBar-v1",
-        env_config=dict(reward_type='sparse'),
+        env="HandPickAndPlace-v0",
+        env_config=dict(
+            ignore_rotation_ctrl=True,
+            ignore_target_rotation=True,
+            success_on_grasp_only=False,
+            randomize_initial_arm_pos=True,
+            randomize_initial_object_pos=True,
+            distance_threshold=0.05,
+            grasp_state=True,
+            grasp_state_reset_p=0.2,
+            target_in_the_air_p=1.0,
+            object_id='small_sphere',
+        ),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
         q_filter=True,
         demo_batch_size=128,
-        demo_file='./demonstrations/yumi_bar_200.pkl',
-        num_demo=200,
+        demo_file='./demonstrations/hand_demo_500_small_sphere.pkl',
+        num_demo=500,
+        max_gpus=4
     )
 
     if spawn_children:

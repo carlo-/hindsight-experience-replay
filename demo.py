@@ -9,7 +9,6 @@ from train import OUT_DIR
 REMOTE_OUT_DIR = f'/run/user/1000/gvfs/sftp:host=mordor.csc.kth.se,port=2222,user=carlora/home/carlora/thesis/exp/hindsight-experience-replay/out/her_torch/'
 
 
-
 def demo(env, agent, steps=10000, reset_on_success=True):
     obs = env.reset()
     for _ in range(steps):
@@ -125,7 +124,8 @@ def generate_hand_pp_demonstrations():
         ignore_target_rotation=True,
         randomize_initial_arm_pos=True,
         randomize_initial_object_pos=True,
-        distance_threshold=0.05
+        distance_threshold=0.05,
+        object_id='small_sphere',
     )
     agent = HandPickAndPlaceAgent(env)
 
@@ -135,7 +135,7 @@ def generate_hand_pp_demonstrations():
             return True
         return False
 
-    demonstrations_from_agent(env, agent, n=500, output_path='./demonstrations/hand_demo_500_sim.pkl',
+    demonstrations_from_agent(env, agent, n=500, output_path='./demonstrations/hand_demo_500_small_sphere.pkl',
                               render=False, skip_episode=should_skip_episode)
 
 

@@ -1,1 +1,1 @@
-git+https://github.com/carlo-/gym@9a8aebf8e1cbdf22452b3e2ed1827dd3603a495e#egg=gym
+git+https://github.com/carlo-/gym@3265fe21c1a248bf21e29983d9e21a3d47d0f99e#egg=gym
