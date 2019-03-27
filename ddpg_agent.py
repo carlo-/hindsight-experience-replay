@@ -54,6 +54,7 @@ class DdpgHer(object):
         'demo_length': 20,
         'local_dir': None,
         'cuda': None,
+        'max_gpus': None,
         'rollouts_per_worker': 2,
         'goal_space_bins': None,
         'archer_params': None,
@@ -84,6 +85,10 @@ class DdpgHer(object):
         if self.config['cuda']:
             n_gpus = torch.cuda.device_count()
             assert n_gpus > 0
+            max_gpus = self.config['max_gpus']
+            if max_gpus is None:
+                max_gpus = n_gpus
+            n_gpus = min(n_gpus, max_gpus)
             n_workers = MPI.COMM_WORLD.size
             rank = MPI.COMM_WORLD.rank
             w_per_gpu = int(np.ceil(n_workers / n_gpus))
