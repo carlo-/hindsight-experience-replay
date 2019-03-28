@@ -6,9 +6,13 @@ from mpi4py import MPI
 import pandas as pd
 import numpy as np
 import torch
+from tqdm import tqdm
 
 
 def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None):
+
+    print('\n')
+    pbar = tqdm(total=n, desc='Demonstrations recorded')
 
     data = {k: [] for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions', 'mb_sim_states']}
     while len(data['mb_obs']) < n:
@@ -39,9 +43,9 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
         ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
         if success:
+            pbar.update()
             for k in ep_data.keys():
                 data['mb_' + k].append(ep_data[k])
-            print(f'{len(data["mb_obs"])}/{n} demonstrations recorded.')
 
             if render:
                 for s in ep_data['sim_states']:
@@ -49,6 +53,7 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
                     env.unwrapped.sim.forward()
                     env.render()
                     sleep(0.01)
+    pbar.close()
 
     for k in data.keys():
         if 'sim' in k:

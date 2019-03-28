@@ -364,6 +364,7 @@ class DdpgHer(object):
 
         with open(status_path, 'rb') as f:
             status = pickle.load(f)
+        status['config']['cuda'] = torch.cuda.is_available()
         agent = DdpgHer(env, status['config'])
         agent._trained = True
 
