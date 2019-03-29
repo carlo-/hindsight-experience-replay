@@ -277,7 +277,7 @@ class DdpgHer(object):
         step_time = (datetime.now() - step_tic).total_seconds()
 
         tic = datetime.now()
-        success_rate = self._eval_agent()
+        success_rate, avg_ep_reward = self._eval_agent()
         eval_time = (datetime.now() - tic).total_seconds()
 
         update_results_dict = dict()
@@ -286,6 +286,7 @@ class DdpgHer(object):
 
         return {
             "test_success_rate": success_rate,
+            "test_mean_ep_reward": avg_ep_reward,
             "avg_her_sampling_time": sampling_tot_time / sampling_calls,
             "avg_rollout_time": np.mean(rollout_times),
             "avg_network_update_time": np.mean(update_times),
@@ -592,8 +593,10 @@ class DdpgHer(object):
     # do the evaluation
     def _eval_agent(self):
         total_success_rate = []
+        ep_rewards = []
         for _ in range(self.config['n_test_rollouts']):
             per_success_rate = []
+            ep_reward = 0.0
             observation = self.env.reset()
             obs = observation['observation']
             g = observation['desired_goal']
@@ -603,12 +606,20 @@ class DdpgHer(object):
                     pi = self.actor_network(input_tensor)
                     # convert the actions
                     actions = pi.detach().cpu().numpy().squeeze()
-                observation_new, _, _, info = self.env.step(actions)
+                observation_new, rew, _, info = self.env.step(actions)
                 obs = observation_new['observation']
                 g = observation_new['desired_goal']
                 per_success_rate.append(info['is_success'])
+                ep_reward += rew
+            ep_rewards.append(ep_reward)
             total_success_rate.append(per_success_rate)
         total_success_rate = np.array(total_success_rate)
         local_success_rate = np.mean(total_success_rate[:, -1])
         global_success_rate = MPI.COMM_WORLD.allreduce(local_success_rate, op=MPI.SUM)
-        return global_success_rate / MPI.COMM_WORLD.Get_size()
+        global_success_rate /= MPI.COMM_WORLD.Get_size()
+
+        avg_ep_reward = np.array(ep_rewards).mean()
+        global_avg_ep_reward = MPI.COMM_WORLD.allreduce(avg_ep_reward, op=MPI.SUM)
+        global_avg_ep_reward /= MPI.COMM_WORLD.Get_size()
+
+        return global_success_rate, global_avg_ep_reward

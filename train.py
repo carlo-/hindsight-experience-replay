@@ -71,7 +71,7 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_bar_test3'
+    local_dir = f'{OUT_DIR}/yumi_bar_test4'
     config = dict(
         env="YumiBar-v1",
         env_config=dict(reward_type='sparse'),
@@ -83,6 +83,7 @@ def main(spawn_children=False):
         demo_file='./demonstrations/yumi_bar_300.pkl',
         num_demo=300,
         max_gpus=4,
+        buffer_size=int(5e6)
     )
 
     if spawn_children:
