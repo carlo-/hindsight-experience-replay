@@ -137,7 +137,7 @@ def generate_hand_pp_demonstrations():
         randomize_initial_arm_pos=True,
         randomize_initial_object_pos=True,
         distance_threshold=0.05,
-        object_id='small_sphere',
+        object_id='teapot',
     )
     agent = HandPickAndPlaceAgent(env)
 
@@ -147,7 +147,7 @@ def generate_hand_pp_demonstrations():
             return True
         return False
 
-    demonstrations_from_agent(env, agent, n=500, output_path='./demonstrations/hand_demo_500_small_sphere.pkl',
+    demonstrations_from_agent(env, agent, n=500, output_path='./demonstrations/hand_demo_500_teapot.pkl',
                               render=False, skip_episode=should_skip_episode)
 
 

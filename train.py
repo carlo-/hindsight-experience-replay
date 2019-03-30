@@ -71,19 +71,26 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_bar_test5'
+    local_dir = f'{OUT_DIR}/hand_pp_teapot_lfd'
     config = dict(
-        env="YumiBar-v1",
-        env_config=dict(reward_type='sparse', randomize_initial_object_pos=True),
+        env="HandPickAndPlace-v0",
+        env_config=dict(
+            ignore_rotation_ctrl=True,
+            ignore_target_rotation=True,
+            randomize_initial_arm_pos=True,
+            randomize_initial_object_pos=True,
+            distance_threshold=0.05,
+            target_in_the_air_p=1.0,
+            object_id='teapot',
+        ),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
         q_filter=True,
         demo_batch_size=128,
-        demo_file='./demonstrations/yumi_bar_300.pkl',
-        num_demo=300,
-        max_gpus=4,
-        buffer_size=int(5e6)
+        demo_file='./demonstrations/hand_demo_500_teapot.pkl',
+        num_demo=500,
+        max_gpus=4
     )
 
     if spawn_children:
