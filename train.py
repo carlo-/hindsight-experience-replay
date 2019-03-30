@@ -71,10 +71,10 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_bar_test4'
+    local_dir = f'{OUT_DIR}/yumi_bar_test5'
     config = dict(
         env="YumiBar-v1",
-        env_config=dict(reward_type='sparse'),
+        env_config=dict(reward_type='sparse', randomize_initial_object_pos=True),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,

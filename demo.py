@@ -112,8 +112,11 @@ def main():
         distance_threshold=0.05,
         object_id='small_sphere',
     )
-
     local_dir = f'{REMOTE_OUT_DIR}/hand_pp_small_sphere_lfd'
+
+    # env = gym.make('YumiBar-v1', reward_type='sparse')
+    # local_dir = f'{REMOTE_OUT_DIR}/yumi_bar_test4'
+
     import glob
     local_dir = glob.glob(local_dir + '/*/checkpoints')[0]
 
@@ -160,7 +163,7 @@ def generate_yumi_reach_demonstrations():
 def generate_yumi_bar_demonstrations():
     from gym.agents.yumi import YumiBarAgent
     from utils import demonstrations_from_agent
-    env = gym.make('YumiBar-v1', reward_type='sparse')
+    env = gym.make('YumiBar-v1', reward_type='sparse', randomize_initial_object_pos=True)
     agent = YumiBarAgent(env)
     file_path = './demonstrations/yumi_bar_300.pkl'
     demonstrations_from_agent(env, agent, n=300, output_path=file_path, render=False)
