@@ -82,6 +82,7 @@ def main(spawn_children=False):
             distance_threshold=0.05,
             target_in_the_air_p=1.0,
             object_id='teapot',
+            object_cage=True,
         ),
         n_epochs=500,
         checkpoint_freq=1,
