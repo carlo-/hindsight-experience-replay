@@ -110,9 +110,9 @@ def main():
         randomize_initial_arm_pos=True,
         randomize_initial_object_pos=True,
         distance_threshold=0.05,
-        object_id='small_sphere',
+        object_id='teapot',
     )
-    local_dir = f'{REMOTE_OUT_DIR}/hand_pp_small_sphere_lfd'
+    local_dir = f'{REMOTE_OUT_DIR}/hand_pp_teapot_lfd'
 
     # env = gym.make('YumiBar-v1', reward_type='sparse')
     # local_dir = f'{REMOTE_OUT_DIR}/yumi_bar_test4'
@@ -167,6 +167,20 @@ def generate_yumi_bar_demonstrations():
     agent = YumiBarAgent(env)
     file_path = './demonstrations/yumi_bar_300.pkl'
     demonstrations_from_agent(env, agent, n=300, output_path=file_path, render=False)
+
+
+def generate_yumi_lift_demonstrations():
+    from gym.agents.yumi import YumiLiftAgent
+    from utils import demonstrations_from_agent
+
+    def eval_success(obs_, reward_, done_, info_):
+        return reward_ > -0.25
+
+    env = gym.make('YumiLift-v1', randomize_initial_object_pos=True)
+    agent = YumiLiftAgent(env)
+    file_path = './demonstrations/yumi_lift_350.pkl' # must be run with 7 workers to get 350 episodes
+    demonstrations_from_agent(env, agent, n=50, output_path=file_path, eval_success=eval_success,
+                              render=False, store_sim_states=False)
 
 
 if __name__ == '__main__':

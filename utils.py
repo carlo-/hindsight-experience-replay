@@ -2,6 +2,7 @@ import pickle
 import copy
 from time import sleep
 
+from gym.agents.base import BaseAgent
 from mpi4py import MPI
 import pandas as pd
 import numpy as np
@@ -9,10 +10,58 @@ import torch
 from tqdm import tqdm
 
 
-def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None):
+def play_mujoco_demonstrations(env, *, sim_states=None, file_path=None, random=False):
 
-    print('\n')
-    pbar = tqdm(total=n, desc='Demonstrations recorded')
+    if sim_states is not None and file_path is not None:
+        raise ValueError('Arguments sim_states and file_path are mutually exclusive!')
+    elif file_path is not None:
+        with open(file_path, 'rb') as f:
+            data = pickle.load(f)
+        states = data['mb_sim_states']
+    elif sim_states is not None:
+        states = [sim_states]
+    else:
+        raise ValueError('Either argument sim_states or file_path must be specified!')
+
+    n = len(states)
+    if random:
+        idx = np.random.choice(n, n, replace=False)
+    else:
+        idx = np.arange(n)
+
+    env.reset()
+    for i in idx:
+        for s in states[i]:
+            env.unwrapped.sim.set_state(copy.deepcopy(s))
+            env.unwrapped.sim.forward()
+            env.render()
+            sleep(0.01)
+
+
+def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None,
+                              eval_success=None, store_sim_states=True, seed=42):
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    is_root = rank == 0
+    if render and comm.Get_size() > 1:
+        raise ValueError('Cannot render when using MPI!')
+
+    if seed is not None:
+        worker_seed = seed + 1000000 * rank
+        np.random.seed(worker_seed)
+        env.seed(worker_seed)
+
+    if eval_success is None:
+        def eval_success(obs_, reward_, done_, info_):
+            return info_['is_success']
+    assert callable(eval_success)
+
+    if is_root:
+        print('\n')
+        pbar = tqdm(total=n, desc='Demonstrations recorded')
+    else:
+        pbar = None
 
     data = {k: [] for k in ['mb_obs', 'mb_ag', 'mb_g', 'mb_actions', 'mb_sim_states']}
     while len(data['mb_obs']) < n:
@@ -27,6 +76,9 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             # episode not interesting enough => skip
             continue
 
+        if isinstance(agent, BaseAgent):
+            agent.reset()
+
         while not done:
             action = agent.predict(obs)
 
@@ -34,35 +86,54 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             ep_data['ag'].append(obs['achieved_goal'].copy())
             ep_data['g'].append(goal.copy())
             ep_data['actions'].append(action.copy())
-            ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
+            if store_sim_states or render:
+                ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
             obs, reward, done, info = env.step(action)
-            success = info['is_success'] and done
+            success = done and eval_success(obs, reward, done, info)
+
         ep_data['obs'].append(obs['observation'].copy())
         ep_data['ag'].append(obs['achieved_goal'].copy())
-        ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
+        if store_sim_states or render:
+            ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
         if success:
-            pbar.update()
+            if is_root:
+                pbar.update()
             for k in ep_data.keys():
+                if not store_sim_states and 'sim' in k:
+                    continue
                 data['mb_' + k].append(ep_data[k])
 
             if render:
-                for s in ep_data['sim_states']:
-                    env.unwrapped.sim.set_state(copy.deepcopy(s))
-                    env.unwrapped.sim.forward()
-                    env.render()
-                    sleep(0.01)
-    pbar.close()
+                play_mujoco_demonstrations(env, sim_states=ep_data['sim_states'])
 
-    for k in data.keys():
-        if 'sim' in k:
-            continue
-        data[k] = np.array(data[k])
+    if is_root:
+        pbar.close()
+        print('\nGathering data...')
 
-    if output_path is not None:
-        pickle.dump(data, open(output_path, 'wb'))
-    return data
+    # gather data from workers; result will be a list of dictionaries
+    data = comm.gather(data, root=0)
+
+    if is_root:
+        # concatenate all lists from the different workers
+        keys = data[0].keys()
+        data = {k: sum([d[k] for d in data], []) for k in keys}
+
+        # convert lists to numpy arrays
+        for k in keys:
+            if 'sim' in k:
+                continue
+            data[k] = np.array(data[k])
+
+        # write data to file
+        if output_path is not None:
+            pickle.dump(data, open(output_path, 'wb'))
+        print('Wrote data to file.')
+
+        return data
+    else:
+        return None
 
 
 def convert_baselines_demonstrations(file_path, *, output_path=None, max_ep_len):
