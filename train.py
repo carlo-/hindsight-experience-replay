@@ -71,26 +71,15 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/hand_pp_teapot_lfd'
+    local_dir = f'{OUT_DIR}/yumi_constrained'
     config = dict(
-        env="HandPickAndPlace-v0",
+        env="YumiConstrained-v1",
         env_config=dict(
-            ignore_rotation_ctrl=True,
-            ignore_target_rotation=True,
-            randomize_initial_arm_pos=True,
-            randomize_initial_object_pos=True,
-            distance_threshold=0.05,
-            target_in_the_air_p=1.0,
-            object_id='teapot',
-            object_cage=True,
+            reward_type='sparse',
         ),
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
-        q_filter=True,
-        demo_batch_size=128,
-        demo_file='./demonstrations/hand_demo_500_teapot.pkl',
-        num_demo=500,
         max_gpus=4
     )
 
