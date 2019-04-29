@@ -183,5 +183,14 @@ def generate_yumi_lift_demonstrations():
                               render=False, store_sim_states=False)
 
 
+def generate_yumi_constrained_demonstrations():
+    from gym.agents.yumi import YumiConstrainedAgent
+    from utils import demonstrations_from_agent
+    env = gym.make('YumiConstrained-v1', reward_type='sparse')
+    agent = YumiConstrainedAgent(env)
+    file_path = './demonstrations/yumi_constrained_100.pkl'
+    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False, store_sim_states=False)
+
+
 if __name__ == '__main__':
     main()

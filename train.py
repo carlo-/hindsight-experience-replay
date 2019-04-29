@@ -71,12 +71,16 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_constrained'
+    local_dir = f'{OUT_DIR}/yumi_constrained_lfd'
     config = dict(
         env="YumiConstrained-v1",
         env_config=dict(
             reward_type='sparse',
         ),
+        q_filter=True,
+        demo_batch_size=128,
+        demo_file='./demonstrations/yumi_constrained_100.pkl',
+        num_demo=100,
         n_epochs=500,
         checkpoint_freq=1,
         local_dir=local_dir,
