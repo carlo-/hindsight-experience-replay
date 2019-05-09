@@ -71,9 +71,9 @@ def train_mpi(config: dict):
 
 def main(spawn_children=False):
 
-    local_dir = f'{OUT_DIR}/yumi_constrained'
+    local_dir = f'{OUT_DIR}/yumi_constrained_v2'
     config = dict(
-        env="YumiConstrained-v1",
+        env="YumiConstrained-v2",
         env_config=dict(
             reward_type='sparse',
         ),
