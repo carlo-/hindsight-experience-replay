@@ -49,7 +49,7 @@ def play_mujoco_demonstrations(env, *, sim_states=None, file_path=None, random=F
             sleep(0.01)
 
 
-def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None,
+def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None, step_callback=None,
                               eval_success=None, store_sim_states=True, seed=42, min_ep_length=None):
 
     comm = MPI.COMM_WORLD
@@ -103,6 +103,9 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
             obs, reward, done, info = env.step(action)
             is_success = eval_success(obs, reward, done, info)
             success = done and is_success
+
+            if callable(step_callback):
+                step_callback()
 
             n_steps = len(ep_data['obs'])
             if min_ep_length is not None and n_steps < min_ep_length and success:

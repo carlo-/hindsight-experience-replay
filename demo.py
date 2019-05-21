@@ -128,6 +128,7 @@ def main():
     # local_dir = f'{REMOTE_OUT_DIR}/yumi_constrained_lfd'
 
     env = gym.make('YumiConstrained-v2', reward_type='sparse', render_poses=False, object_on_table=True)
+    # local_dir = f'{OUT_DIR}/yumi_constr_push'
     local_dir = f'{OUT_DIR}/yumi_im_from_fetch_push'
 
     import glob
@@ -216,22 +217,24 @@ def generate_yumi_imitator_push_demonstrations():
     dataset.normalize()
 
     teacher_env = gym.make(
-        'FetchPickAndPlace-v1',
-        reward_type='sparse'
+        'FetchPickAndPlaceLong-v1',
+        reward_type='sparse',
+        has_rotating_platform=True,
     )
 
     env = gym.make(
-        'YumiConstrained-v2',
+        'YumiConstrainedLong-v2',
         reward_type='sparse',
         render_poses=False,
         object_on_table=True,
+        has_rotating_platform=True,
     )
 
     from gym.agents.yumi import YumiImitatorAgent
-    from gym.agents.fetch import FetchPushAgent
+    from gym.agents.fetch import FetchPushAgent, FetchPickAndPlaceAgent
 
-    # teacher = FetchPickAndPlaceAgent(teacher_env)
-    teacher = FetchPushAgent(teacher_env)
+    teacher = FetchPickAndPlaceAgent(teacher_env)
+    # teacher = FetchPushAgent(teacher_env)
     agent = YumiImitatorAgent(env, teacher_env=teacher_env, teacher_agent=teacher, a_scaler=dataset.a_scaler,
                               b_scaler=dataset.b_scaler, model=model)
 
@@ -241,10 +244,14 @@ def generate_yumi_imitator_push_demonstrations():
             return True
         return False
 
-    file_path = './demonstrations/yumi_imitator_from_fetch_push_100.pkl'
-    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False,
+    def step_callback():
+        teacher_env.render()
+        env.render()
+
+    file_path = './demonstrations/yumi_imitator_from_fetch_push_platform_100.pkl'
+    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False, step_callback=step_callback,
                               store_sim_states=False, min_ep_length=15, skip_episode=should_skip_episode)
 
 
 if __name__ == '__main__':
-    main()
+    generate_yumi_imitator_push_demonstrations()
