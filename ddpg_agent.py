@@ -386,10 +386,10 @@ class DdpgHer(object):
             raise RuntimeError
         g = obs['desired_goal']
         obs = obs['observation']
-        inputs = self._preproc_inputs(obs, g)
         with torch.no_grad():
+            inputs = self._preproc_inputs(obs, g)
             pi = self.actor_network(inputs)
-        action = pi.detach().cpu().numpy().squeeze()
+            action = pi.cpu().numpy().squeeze()
         return action
 
     def train(self):
