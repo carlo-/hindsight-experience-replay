@@ -10,6 +10,17 @@ import torch
 from tqdm import tqdm
 
 
+def import_thesis_package(remote=False):
+    import sys
+    if remote:
+        raise NotImplementedError
+    else:
+        the_path = "/home/carlo/KTH/thesis/ms-thesis/"
+        if the_path not in sys.path:
+            sys.path.append(the_path)
+    return the_path
+
+
 def play_mujoco_demonstrations(env, *, sim_states=None, file_path=None, random=False):
 
     if sim_states is not None and file_path is not None:
@@ -39,7 +50,7 @@ def play_mujoco_demonstrations(env, *, sim_states=None, file_path=None, random=F
 
 
 def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, skip_episode=None,
-                              eval_success=None, store_sim_states=True, seed=42):
+                              eval_success=None, store_sim_states=True, seed=42, min_ep_length=None):
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -90,7 +101,14 @@ def demonstrations_from_agent(env, agent, *, n, output_path=None, render=False, 
                 ep_data['sim_states'].append(copy.deepcopy(env.unwrapped.sim.get_state()))
 
             obs, reward, done, info = env.step(action)
-            success = done and eval_success(obs, reward, done, info)
+            is_success = eval_success(obs, reward, done, info)
+            success = done and is_success
+
+            n_steps = len(ep_data['obs'])
+            if min_ep_length is not None and n_steps < min_ep_length and success:
+                # episode not interesting enough => skip
+                success = False
+                break
 
         ep_data['obs'].append(obs['observation'].copy())
         ep_data['ag'].append(obs['achieved_goal'].copy())

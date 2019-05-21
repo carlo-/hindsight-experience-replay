@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import gym
 from tqdm import tqdm
+import numpy as np
 
 from ddpg_agent import DdpgHer
 from train import OUT_DIR
@@ -64,8 +65,11 @@ def evaluate(env, agent, episodes=200):
             action = agent.predict(obs)
             obs, reward, done, info = env.step(action)
             success = info['is_success']
-            if done or success == 1.0:
-                success_rate += success
+            print(success)
+            if success == 1.0:
+                success_rate += 1.0
+                break
+            if done:
                 break
     success_rate /= episodes
     print('success_rate', success_rate)
@@ -103,19 +107,28 @@ def main():
     # env = gym.make('FetchPickAndPlace-v1')
     # local_dir = f'{OUT_DIR}/fetch_test/mordor'
 
-    env = gym.make(
-        'HandPickAndPlace-v0',
-        ignore_rotation_ctrl=True,
-        ignore_target_rotation=True,
-        randomize_initial_arm_pos=True,
-        randomize_initial_object_pos=True,
-        distance_threshold=0.05,
-        object_id='teapot',
-    )
-    local_dir = f'{REMOTE_OUT_DIR}/hand_pp_teapot_lfd'
+    # env = gym.make(
+    #     'HandPickAndPlace-v0',
+    #     ignore_rotation_ctrl=True,
+    #     ignore_target_rotation=True,
+    #     randomize_initial_arm_pos=True,
+    #     randomize_initial_object_pos=True,
+    #     distance_threshold=0.05,
+    #     object_id='original',
+    # )
+    # local_dir = f'{REMOTE_OUT_DIR}/hand_pp_lfd'
 
     # env = gym.make('YumiBar-v1', reward_type='sparse')
     # local_dir = f'{REMOTE_OUT_DIR}/yumi_bar_test4'
+
+    # env = gym.make('YumiConstrained-v2', reward_type='sparse', render_poses=False)
+    # local_dir = f'{OUT_DIR}/yumi_constrained_v2'
+
+    # env = gym.make('YumiConstrained-v1', reward_type='sparse', render_poses=False)
+    # local_dir = f'{REMOTE_OUT_DIR}/yumi_constrained_lfd'
+
+    env = gym.make('YumiConstrained-v2', reward_type='sparse', render_poses=False, object_on_table=True)
+    local_dir = f'{OUT_DIR}/yumi_im_from_fetch_push'
 
     import glob
     local_dir = glob.glob(local_dir + '/*/checkpoints')[0]
@@ -154,9 +167,9 @@ def generate_hand_pp_demonstrations():
 def generate_yumi_reach_demonstrations():
     from gym.agents.yumi import YumiReachAgent
     from utils import demonstrations_from_agent
-    env = gym.make('YumiReachTwoArms-v0', reward_type='sparse')
+    env = gym.make('YumiReachTwoArms-v1', reward_type='sparse')
     agent = YumiReachAgent(env)
-    file_path = './demonstrations/yumi_reach_two_arms_100.pkl'
+    file_path = './demonstrations/yumi_reach_two_arms_700.pkl'
     demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False)
 
 
@@ -176,10 +189,10 @@ def generate_yumi_lift_demonstrations():
     def eval_success(obs_, reward_, done_, info_):
         return reward_ > -0.25
 
-    env = gym.make('YumiLift-v1', randomize_initial_object_pos=True)
+    env = gym.make('YumiLift-v1', randomize_initial_object_pos=False)
     agent = YumiLiftAgent(env)
-    file_path = './demonstrations/yumi_lift_350.pkl' # must be run with 7 workers to get 350 episodes
-    demonstrations_from_agent(env, agent, n=50, output_path=file_path, eval_success=eval_success,
+    file_path = './demonstrations/yumi_lift_7000_fixed.pkl' # must be run with 7 workers to get 350 episodes
+    demonstrations_from_agent(env, agent, n=1000, output_path=file_path, eval_success=eval_success,
                               render=False, store_sim_states=False)
 
 
@@ -190,6 +203,47 @@ def generate_yumi_constrained_demonstrations():
     agent = YumiConstrainedAgent(env)
     file_path = './demonstrations/yumi_constrained_100.pkl'
     demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False, store_sim_states=False)
+
+
+def generate_yumi_imitator_push_demonstrations():
+    from utils import demonstrations_from_agent, import_thesis_package
+    ms_thesis_path = import_thesis_package(remote=False)
+    from playground.twin_vae import TwinVAE, TwinDataset, SimpleAutoencoder
+
+    model = TwinVAE.load(f'{ms_thesis_path}/out/twin_yumi_v2_fetch_ae_resets_new_l/checkpoints/model_c1.pt',
+                         net_class=SimpleAutoencoder)
+    dataset = TwinDataset.load(f'{ms_thesis_path}/out/pp_yumi_v2_fetch_twin_dataset_10k.pkl')
+    dataset.normalize()
+
+    teacher_env = gym.make(
+        'FetchPickAndPlace-v1',
+        reward_type='sparse'
+    )
+
+    env = gym.make(
+        'YumiConstrained-v2',
+        reward_type='sparse',
+        render_poses=False,
+        object_on_table=True,
+    )
+
+    from gym.agents.yumi import YumiImitatorAgent
+    from gym.agents.fetch import FetchPushAgent
+
+    # teacher = FetchPickAndPlaceAgent(teacher_env)
+    teacher = FetchPushAgent(teacher_env)
+    agent = YumiImitatorAgent(env, teacher_env=teacher_env, teacher_agent=teacher, a_scaler=dataset.a_scaler,
+                              b_scaler=dataset.b_scaler, model=model)
+
+    def should_skip_episode(obs):
+        if np.linalg.norm(obs['desired_goal'] - obs['achieved_goal']) < 0.10:
+            # object is already too close to the goal
+            return True
+        return False
+
+    file_path = './demonstrations/yumi_imitator_from_fetch_push_100.pkl'
+    demonstrations_from_agent(env, agent, n=100, output_path=file_path, render=False,
+                              store_sim_states=False, min_ep_length=15, skip_episode=should_skip_episode)
 
 
 if __name__ == '__main__':
